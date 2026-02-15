@@ -538,8 +538,8 @@ export default function ChatPage() {
                     <span className="truncate">
                       <strong className="hidden sm:inline">Auto-detect mode:</strong>
                       <span className="sm:hidden">✨ </span>
-                      <span className="hidden max-[390px]:inline">🇹🇭🇬🇧🇰🇷</span>
-                      <span className="max-[390px]:hidden">Type in any language (🇹🇭 🇬🇧 🇰🇷) and I'll reply in the same language</span>
+                      <span className="hidden max-[390px]:inline">🇹🇭🇬🇧🇰🇷🇨🇳</span>
+                      <span className="max-[390px]:hidden">Type in any language (🇹🇭 🇬🇧 🇰🇷 🇨🇳) and I'll reply in the same language</span>
                     </span>
                   </>
                 ) : (
