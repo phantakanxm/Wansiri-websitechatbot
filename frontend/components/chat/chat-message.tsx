@@ -84,7 +84,7 @@ export function ChatMessage({
       {/* Message Content */}
       <div
         className={cn(
-          'flex flex-col gap-0.5 max-[390px]:gap-0.5 sm:gap-1 max-w-[94%] max-[390px]:max-w-[94%] sm:max-w-[90%] md:max-w-[85%]',
+          'flex flex-col gap-0.5 max-[390px]:gap-0.5 sm:gap-1 max-w-[92%] max-[390px]:max-w-[92%] sm:max-w-[90%] md:max-w-[85%]',
           isUser ? 'items-end' : 'items-start'
         )}
       >
@@ -98,9 +98,9 @@ export function ChatMessage({
           )}
         >
           {isUser ? (
-            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+            <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none break-words">
+            <div className="prose prose-sm max-[390px]:prose-xs dark:prose-invert max-w-none break-words">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 components={{
@@ -117,17 +117,17 @@ export function ChatMessage({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-6 w-6 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100"
+                              className="h-5 w-5 sm:h-6 sm:w-6 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-100"
                               onClick={() => copyToClipboard(code)}
                             >
                               {copied ? (
-                                <Check size={12} />
+                                <Check size={10} className="sm:w-3 sm:h-3" />
                               ) : (
-                                <Copy size={12} />
+                                <Copy size={10} className="sm:w-3 sm:h-3" />
                               )}
                             </Button>
                           </div>
-                          <pre className="bg-zinc-950 text-zinc-50 p-4 rounded-lg overflow-x-auto max-w-full">
+                          <pre className="bg-zinc-950 text-zinc-50 p-2 sm:p-4 rounded-lg overflow-x-auto max-w-full text-xs sm:text-sm">
                             <code className={className} {...props}>
                               {children}
                             </code>
@@ -137,7 +137,7 @@ export function ChatMessage({
                     }
                     return (
                       <code
-                        className="bg-zinc-200 dark:bg-zinc-800 px-1 py-0.5 rounded text-sm"
+                        className="bg-zinc-200 dark:bg-zinc-800 px-1 py-0.5 rounded text-xs sm:text-sm"
                         {...props}
                       >
                         {children}
@@ -145,13 +145,25 @@ export function ChatMessage({
                     );
                   },
                   p({ children }) {
-                    return <p className="mb-2 last:mb-0 break-words">{children}</p>;
+                    return <p className="mb-1.5 sm:mb-2 last:mb-0 break-words text-xs sm:text-sm leading-relaxed">{children}</p>;
                   },
                   ul({ children }) {
-                    return <ul className="list-disc pl-4 mb-2 break-words">{children}</ul>;
+                    return <ul className="list-disc pl-3 sm:pl-4 mb-1.5 sm:mb-2 break-words text-xs sm:text-sm">{children}</ul>;
                   },
                   ol({ children }) {
-                    return <ol className="list-decimal pl-4 mb-2 break-words">{children}</ol>;
+                    return <ol className="list-decimal pl-3 sm:pl-4 mb-1.5 sm:mb-2 break-words text-xs sm:text-sm">{children}</ol>;
+                  },
+                  h1({ children }) {
+                    return <h1 className="text-base sm:text-lg font-bold mb-2">{children}</h1>;
+                  },
+                  h2({ children }) {
+                    return <h2 className="text-sm sm:text-base font-bold mb-1.5 sm:mb-2">{children}</h2>;
+                  },
+                  h3({ children }) {
+                    return <h3 className="text-xs sm:text-sm font-bold mb-1">{children}</h3>;
+                  },
+                  li({ children }) {
+                    return <li className="mb-0.5 sm:mb-1">{children}</li>;
                   },
                 }}
               >

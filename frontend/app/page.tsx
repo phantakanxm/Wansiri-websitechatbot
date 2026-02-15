@@ -444,7 +444,7 @@ export default function ChatPage() {
             <div className="flex items-center gap-0.5 bg-muted/50 rounded-lg px-0.5 sm:px-1 py-0.5 sm:py-1 relative z-50">
               {/* Mode Indicator */}
               <div 
-                className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] max-[390px]:text-[9px] sm:text-[10px] font-medium transition-colors ${
+                className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] max-[390px]:text-[8px] sm:text-[10px] font-medium transition-colors ${
                   languageMode === 'auto' 
                     ? 'bg-primary text-primary-foreground' 
                     : 'text-muted-foreground hover:text-foreground'
@@ -455,7 +455,7 @@ export default function ChatPage() {
               >
                 <Sparkles className="h-2.5 w-2.5" />
                 <span className="hidden sm:inline">{languageMode === 'auto' ? 'Auto' : 'Manual'}</span>
-                <span className="sm:hidden">{languageMode === 'auto' ? '✨' : 'M'}</span>
+                <span className="inline sm:hidden">{languageMode === 'auto' ? 'Auto' : 'Man'}</span>
               </div>
 
               {/* Language Dropdown */}
@@ -466,6 +466,9 @@ export default function ChatPage() {
                 >
                   <span className="text-sm">{LANGUAGE_CONFIG[displayLanguage].flag}</span>
                   <span className="hidden sm:inline">{LANGUAGE_CONFIG[displayLanguage].name}</span>
+                  <span className="inline sm:hidden text-[9px] max-[390px]:text-[9px]">
+                    {displayLanguage === 'en' ? 'EN' : displayLanguage === 'th' ? 'TH' : displayLanguage === 'ko' ? 'KO' : 'ZH'}
+                  </span>
                   <ChevronDown className={`h-2.5 w-2.5 sm:h-3 sm:w-3 transition-transform ${isLangDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
