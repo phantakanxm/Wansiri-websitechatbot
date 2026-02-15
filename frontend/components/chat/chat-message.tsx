@@ -67,31 +67,31 @@ export function ChatMessage({
   return (
     <div
       className={cn(
-        'flex gap-3 items-start group',
+        'flex gap-1.5 max-[390px]:gap-1.5 sm:gap-3 items-start group',
         isUser ? 'flex-row-reverse' : 'flex-row'
       )}
     >
       {/* Avatar */}
-      <Avatar className="h-8 w-8 shrink-0">
+      <Avatar className="h-5 w-5 max-[390px]:h-5 max-[390px]:w-5 sm:h-7 sm:w-7 md:h-8 md:w-8 shrink-0">
         <AvatarFallback className={cn(
           isUser ? 'bg-[#16bec9]' : 'bg-[#16bec9]',
-          'text-white text-xs'
+          'text-white text-[9px] max-[390px]:text-[9px] sm:text-[10px]'
         )}>
-          {isUser ? <User size={14} /> : <Bot size={14} />}
+          {isUser ? <User size={10} className="sm:w-[14px] sm:h-[14px]" /> : <Bot size={10} className="sm:w-[14px] sm:h-[14px]" />}
         </AvatarFallback>
       </Avatar>
 
       {/* Message Content */}
       <div
         className={cn(
-          'flex flex-col gap-1 max-w-[90%] md:max-w-[85%]',
+          'flex flex-col gap-0.5 max-[390px]:gap-0.5 sm:gap-1 max-w-[94%] max-[390px]:max-w-[94%] sm:max-w-[90%] md:max-w-[85%]',
           isUser ? 'items-end' : 'items-start'
         )}
       >
         {/* Bubble */}
         <div
           className={cn(
-            'rounded-2xl px-4 py-3 max-w-full',
+            'rounded-lg max-[390px]:rounded-lg sm:rounded-xl px-2 max-[390px]:px-2 sm:px-3 md:px-4 py-1.5 max-[390px]:py-1.5 sm:py-2.5 md:py-3 max-w-full',
             isUser
               ? 'bg-[#16bec9] text-white'
               : 'bg-muted border border-border/50'
@@ -163,28 +163,28 @@ export function ChatMessage({
         
         {/* Quick Reply Buttons - Countries */}
         {!isUser && showCountries && onQuickReply && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-1 max-[390px]:mt-1 sm:mt-2 md:mt-3 grid grid-cols-2 gap-1 max-[390px]:gap-1 sm:gap-2">
             <button
               onClick={() => onQuickReply('1')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {labels.th}
             </button>
             <button
               onClick={() => onQuickReply('2')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {labels.kr}
             </button>
             <button
               onClick={() => onQuickReply('3')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {labels.uk}
             </button>
             <button
               onClick={() => onQuickReply('4')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {labels.other}
             </button>
@@ -193,16 +193,16 @@ export function ChatMessage({
 
         {/* Quick Reply Buttons - Services */}
         {!isUser && showServices && onQuickReply && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-1 max-[390px]:mt-1 sm:mt-2 md:mt-3 flex flex-col gap-1 max-[390px]:gap-1 sm:gap-2">
             <button
               onClick={() => onQuickReply('1')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {svcLabels.srs}
             </button>
             <button
               onClick={() => onQuickReply('2')}
-              className="px-4 py-2 rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-sm font-medium shadow-sm"
+              className="px-1.5 max-[390px]:px-1.5 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 rounded-md max-[390px]:rounded-md sm:rounded-xl bg-white border-2 border-[#16bec9]/20 hover:border-[#16bec9] hover:bg-[#16bec9]/10 transition-all duration-200 text-[9px] max-[390px]:text-[9px] sm:text-xs md:text-sm font-medium shadow-sm text-left"
             >
               {svcLabels.consult}
             </button>

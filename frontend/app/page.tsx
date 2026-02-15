@@ -31,10 +31,10 @@ function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      className="h-9 w-9"
+      className="h-6 w-6 max-[390px]:h-6 max-[390px]:w-6 sm:h-8 sm:w-8 md:h-9 md:w-9"
     >
-      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <Sun className="h-3 w-3 max-[390px]:h-3 max-[390px]:w-3 sm:h-4 sm:w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-3 w-3 max-[390px]:h-3 max-[390px]:w-3 sm:h-4 sm:w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
       <span className="sr-only">Toggle theme</span>
     </Button>
   );
@@ -428,9 +428,9 @@ export default function ChatPage() {
     <div className="flex h-screen bg-background">
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="border-b px-4 py-3 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 relative">
+        <header className="border-b px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-3 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-50 relative">
           <div className="flex items-center">
-            <div className="h-12 w-[180px] overflow-hidden flex items-center justify-center">
+            <div className="h-5 max-[390px]:h-5 sm:h-8 md:h-10 lg:h-12 w-[90px] max-[390px]:w-[90px] sm:w-[120px] md:w-[150px] lg:w-[180px] overflow-hidden flex items-center justify-center">
               <img
                 src="/logo.png"
                 alt="Wansiri Hospital"
@@ -439,12 +439,12 @@ export default function ChatPage() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 sm:gap-1 md:gap-2">
             {/* Smart Language Selector */}
-            <div className="flex items-center gap-1 bg-muted/50 rounded-lg px-1 py-1 relative z-50">
+            <div className="flex items-center gap-0.5 bg-muted/50 rounded-lg px-0.5 sm:px-1 py-0.5 sm:py-1 relative z-50">
               {/* Mode Indicator */}
               <div 
-                className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                className={`flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] max-[390px]:text-[9px] sm:text-[10px] font-medium transition-colors ${
                   languageMode === 'auto' 
                     ? 'bg-primary text-primary-foreground' 
                     : 'text-muted-foreground hover:text-foreground'
@@ -453,7 +453,7 @@ export default function ChatPage() {
                 onClick={languageMode === 'manual' ? resetToAuto : undefined}
                 style={{ cursor: languageMode === 'manual' ? 'pointer' : 'default' }}
               >
-                <Sparkles className="h-3 w-3" />
+                <Sparkles className="h-2.5 w-2.5" />
                 <span className="hidden sm:inline">{languageMode === 'auto' ? 'Auto' : 'Manual'}</span>
                 <span className="sm:hidden">{languageMode === 'auto' ? '✨' : 'M'}</span>
               </div>
@@ -462,11 +462,11 @@ export default function ChatPage() {
               <div className="relative">
                 <button
                   onClick={() => setIsLangDropdownOpen(!isLangDropdownOpen)}
-                  className="flex items-center gap-1.5 px-2 py-1 rounded text-sm hover:bg-accent transition-colors"
+                  className="flex items-center gap-0.5 px-1 py-0.5 rounded text-xs sm:text-sm hover:bg-accent transition-colors"
                 >
-                  <span>{LANGUAGE_CONFIG[displayLanguage].flag}</span>
+                  <span className="text-sm">{LANGUAGE_CONFIG[displayLanguage].flag}</span>
                   <span className="hidden sm:inline">{LANGUAGE_CONFIG[displayLanguage].name}</span>
-                  <ChevronDown className={`h-3 w-3 transition-transform ${isLangDropdownOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`h-2.5 w-2.5 sm:h-3 sm:w-3 transition-transform ${isLangDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {isLangDropdownOpen && (
@@ -513,10 +513,10 @@ export default function ChatPage() {
                 variant="ghost"
                 size="icon"
                 onClick={resetSession}
-                className="h-9 w-9 text-muted-foreground"
+                className="h-6 w-6 max-[390px]:h-6 max-[390px]:w-6 sm:h-8 sm:w-8 md:h-9 md:w-9 text-muted-foreground"
                 title="Start new conversation"
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-3 w-3 max-[390px]:h-3 max-[390px]:w-3 sm:h-4 sm:w-4" />
               </Button>
             )}
             
@@ -526,24 +526,29 @@ export default function ChatPage() {
 
         {/* Language Mode Banner */}
         {showLangBanner && (
-          <div className="px-4 py-2 bg-gradient-to-r from-[#16bec9]/10 to-[#16bec9]/5 dark:from-[#16bec9]/20 dark:to-[#16bec9]/10 border-b text-sm">
+          <div className="px-2 max-[390px]:px-2 sm:px-3 md:px-4 py-1 max-[390px]:py-1 sm:py-2 bg-gradient-to-r from-[#16bec9]/10 to-[#16bec9]/5 dark:from-[#16bec9]/20 dark:to-[#16bec9]/10 border-b text-[10px] max-[390px]:text-[10px] sm:text-xs md:text-sm">
             <div className="flex items-center justify-between max-w-4xl mx-auto">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 max-[390px]:gap-1 sm:gap-1.5 md:gap-2 flex-1 min-w-0">
                 {languageMode === 'auto' ? (
                   <>
-                    <Sparkles className="h-4 w-4 text-[#16bec9]" />
-                    <span>
-                      <strong>Auto-detect mode:</strong> Type in any language (🇹🇭 🇬🇧 🇰🇷) and I'll reply in the same language
+                    <Sparkles className="h-3 w-3 max-[390px]:h-3 max-[390px]:w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 text-[#16bec9] shrink-0" />
+                    <span className="truncate">
+                      <strong className="hidden sm:inline">Auto-detect mode:</strong>
+                      <span className="sm:hidden">✨ </span>
+                      <span className="hidden max-[390px]:inline">🇹🇭🇬🇧🇰🇷</span>
+                      <span className="max-[390px]:hidden">Type in any language (🇹🇭 🇬🇧 🇰🇷) and I'll reply in the same language</span>
                     </span>
                   </>
                 ) : (
                   <>
-                    <Globe className="h-4 w-4 text-[#16bec9]" />
-                    <span>
-                      <strong>Manual mode:</strong> Locked to {LANGUAGE_CONFIG[selectedLanguage].flag} {LANGUAGE_CONFIG[selectedLanguage].name}. 
+                    <Globe className="h-3 w-3 max-[390px]:h-3 max-[390px]:w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 text-[#16bec9] shrink-0" />
+                    <span className="truncate">
+                      <strong className="hidden sm:inline">Manual mode:</strong>
+                      <span className="sm:hidden">🌏 </span>
+                      {LANGUAGE_CONFIG[selectedLanguage].flag} {LANGUAGE_CONFIG[selectedLanguage].name}. 
                       <button 
                         onClick={resetToAuto}
-                        className="text-[#16bec9] hover:underline"
+                        className="text-[#16bec9] hover:underline whitespace-nowrap"
                       >
                         Switch to auto
                       </button>
@@ -554,7 +559,7 @@ export default function ChatPage() {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-6 px-2 text-xs"
+                className="h-5 max-[390px]:h-5 sm:h-6 px-1 max-[390px]:px-1 sm:px-1.5 text-[10px] max-[390px]:text-[10px] sm:text-xs shrink-0 ml-1 max-[390px]:ml-1 sm:ml-2"
                 onClick={() => setShowLangBanner(false)}
               >
                 ✕
@@ -565,7 +570,7 @@ export default function ChatPage() {
 
         {/* Detected Language Indicator (only in auto mode) */}
         {languageMode === 'auto' && detectedLanguage && (
-          <div className="px-4 py-1 bg-muted/30 text-xs text-center border-b text-muted-foreground">
+          <div className="px-2 max-[390px]:px-2 sm:px-4 py-0.5 max-[390px]:py-0.5 sm:py-1 bg-muted/30 text-[10px] max-[390px]:text-[10px] sm:text-xs text-center border-b text-muted-foreground">
             Detected: {LANGUAGE_CONFIG[detectedLanguage].flag} {LANGUAGE_CONFIG[detectedLanguage].name}
           </div>
         )}

@@ -70,7 +70,7 @@ export function ChatContainer({
       )}
       ref={scrollRef}
     >
-      <div className="flex flex-col gap-4 p-4 max-w-3xl mx-auto min-h-full">
+      <div className="flex flex-col gap-1.5 max-[390px]:gap-1.5 sm:gap-3 md:gap-4 p-1.5 max-[390px]:p-1.5 sm:p-3 md:p-4 max-w-3xl mx-auto min-h-full">
         {visibleMessages.map((message, index) => {
           const isLastMessage = index === visibleMessages.length - 1;
           return (
