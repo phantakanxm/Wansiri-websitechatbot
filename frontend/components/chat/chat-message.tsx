@@ -17,7 +17,7 @@ interface ChatMessageProps {
   showSkip?: boolean;
   showCountries?: boolean;
   showServices?: boolean;
-  language?: 'en' | 'th' | 'ko';
+  language?: 'en' | 'th' | 'ko' | 'zh';
 }
 
 export function ChatMessage({ 
