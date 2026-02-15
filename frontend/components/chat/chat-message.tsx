@@ -38,12 +38,14 @@ export function ChatMessage({
     en: { th: '🇹🇭 Thailand', kr: '🇰🇷 Korea', uk: '🇬🇧 UK/English', other: '🌏 Other' },
     th: { th: '🇹🇭 ไทย', kr: '🇰🇷 เกาหลี', uk: '🇬🇧 อังกฤษ', other: '🌏 อื่นๆ' },
     ko: { th: '🇹🇭 태국', kr: '🇰🇷 한국', uk: '🇬🇧 영국', other: '🌏 기타' },
+    zh: { th: '🇹🇭 泰国', kr: '🇰🇷 韩国', uk: '🇬🇧 英国', other: '🌏 其他' },
   };
 
   const serviceLabels = {
     en: { srs: '💉 SRS (Sex Reassignment Surgery)', consult: '💬 Consultation Only' },
     th: { srs: '💉 SRS (การผ่าตัดแปลงเพศ)', consult: '💬 ปรึกษาก่อนตัดสินใจ' },
     ko: { srs: '💉 SRS (성전환 수술)', consult: '💬 상담' },
+    zh: { srs: '💉 SRS (性别重置手术)', consult: '💬 仅咨询' },
   };
 
   const labels = countryLabels[language] || countryLabels.en;
