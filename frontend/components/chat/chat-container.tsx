@@ -38,6 +38,11 @@ export function ChatContainer({
     (msg) => !(msg.isStreaming && msg.content === '')
   );
 
+  // Don't show typing indicator if the last message is still streaming
+  const lastMessage = visibleMessages[visibleMessages.length - 1];
+  const isLastMessageStreaming = lastMessage?.isStreaming ?? false;
+  const showTypingIndicator = isTyping && !isLastMessageStreaming;
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -86,7 +91,7 @@ export function ChatContainer({
             </div>
           );
         })}
-        {isTyping && (
+        {showTypingIndicator && (
           <div className="animate-fade-in">
             <TypingIndicator />
           </div>

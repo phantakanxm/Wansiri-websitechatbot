@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { FileText, Moon, Sun, RefreshCw, Globe, ChevronDown, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
@@ -110,6 +109,118 @@ export default function ChatPage() {
     }
   }, []);
 
+  // Helper function to handle streaming response
+  const handleStreamingResponse = useCallback(async (
+    response: Response,
+    assistantMessageId: string,
+    onComplete?: (data: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string }) => void
+  ) => {
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    const decoder = new TextDecoder();
+    let accumulatedContent = '';
+    let metadata: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string } = {};
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6); // Remove 'data: ' prefix
+            
+            if (data === '[DONE]') {
+              // Stream complete
+              break;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              
+              // Handle different message types from backend
+              switch (parsed.type) {
+                case 'session':
+                  // Initial session info
+                  if (parsed.sessionId) metadata.sessionId = parsed.sessionId;
+                  break;
+                  
+                case 'chunk':
+                  // Content chunk - backend sends accumulated content
+                  if (parsed.content !== undefined) {
+                    accumulatedContent = parsed.content;
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMessageId
+                          ? { ...msg, content: accumulatedContent, isStreaming: true }
+                          : msg
+                      )
+                    );
+                  }
+                  break;
+                  
+                case 'complete':
+                  // Final metadata
+                  if (parsed.detectedLanguage) metadata.detectedLanguage = parsed.detectedLanguage;
+                  if (parsed.targetLanguage) metadata.mode = parsed.targetLanguage; // Using targetLanguage as mode indicator
+                  break;
+                  
+                case 'error':
+                  throw new Error(parsed.message || 'Streaming error');
+                  
+                default:
+                  // Legacy format support (direct content without type)
+                  if (parsed.content !== undefined && !parsed.type) {
+                    accumulatedContent += parsed.content;
+                    setMessages((prev) =>
+                      prev.map((msg) =>
+                        msg.id === assistantMessageId
+                          ? { ...msg, content: accumulatedContent, isStreaming: true }
+                          : msg
+                      )
+                    );
+                  }
+                  // Legacy metadata
+                  if (parsed.sessionId) metadata.sessionId = parsed.sessionId;
+                  if (parsed.detectedLanguage) metadata.detectedLanguage = parsed.detectedLanguage;
+                  if (parsed.mode) metadata.mode = parsed.mode;
+              }
+              
+            } catch (e) {
+              // Ignore parse errors for partial chunks
+              console.log('Parse error (likely partial chunk):', e);
+            }
+          }
+        }
+      }
+
+      // Mark streaming as complete
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMessageId
+            ? { ...msg, content: accumulatedContent, isStreaming: false }
+            : msg
+        )
+      );
+
+      if (onComplete) {
+        onComplete(metadata);
+      }
+
+    } catch (error) {
+      console.error('Stream reading error:', error);
+      throw error;
+    } finally {
+      reader.releaseLock();
+    }
+  }, []);
+
   // Trigger welcome message for new users (onboarding)
   const triggerWelcomeMessage = useCallback(async () => {
     if (welcomeTriggered.current) return; // Prevent duplicate calls
@@ -131,7 +242,7 @@ export default function ChatPage() {
     ]);
 
     try {
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -146,33 +257,22 @@ export default function ChatPage() {
 
       if (!response.ok) throw new Error('Failed to get welcome message');
 
-      const data = await response.json();
-      
-      if (data.sessionId) {
-        setSessionId(data.sessionId);
-        localStorage.setItem('chatSessionId', data.sessionId);
-      }
+      // Handle streaming response
+      await handleStreamingResponse(response, welcomeMessageId, (metadata) => {
+        if (metadata.sessionId) {
+          setSessionId(metadata.sessionId);
+          localStorage.setItem('chatSessionId', metadata.sessionId);
+        }
 
-      if (data.detectedLanguage) {
-        setDetectedLanguage(data.detectedLanguage);
-      }
+        if (metadata.detectedLanguage) {
+          setDetectedLanguage(metadata.detectedLanguage);
+        }
 
-      // Set chat mode for onboarding UI
-      if (data.mode) {
-        setChatMode(data.mode);
-      }
+        if (metadata.mode) {
+          setChatMode(metadata.mode);
+        }
+      });
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === welcomeMessageId
-            ? {
-                ...msg,
-                content: data.response,
-                isStreaming: false,
-              }
-            : msg
-        )
-      );
     } catch (error) {
       console.error('Welcome message error:', error);
       // Fallback welcome message
@@ -190,7 +290,7 @@ export default function ChatPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [languageMode, selectedLanguage, welcomeTriggered]);
+  }, [languageMode, selectedLanguage, welcomeTriggered, handleStreamingResponse]);
 
   // Save sessionId and language settings to localStorage only
   // Messages are stored in Supabase, not localStorage
@@ -261,7 +361,7 @@ export default function ChatPage() {
     ]);
 
     try {
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -276,39 +376,23 @@ export default function ChatPage() {
 
       if (!response.ok) throw new Error('Failed to send message');
 
-      const data = await response.json();
-      
-      // DEBUG: Log response details
-      console.log('[FRONTEND] Response received:');
-      console.log('[FRONTEND] Response length:', data.response?.length || 0);
-      console.log('[FRONTEND] Response text:', data.response);
-      console.log('[FRONTEND] Last 30 chars:', data.response?.slice(-30));
-      
-      if (data.sessionId) {
-        setSessionId(data.sessionId);
-      }
+      // Handle streaming response
+      await handleStreamingResponse(response, assistantMessageId, (metadata) => {
+        if (metadata.sessionId) {
+          setSessionId(metadata.sessionId);
+        }
 
-      // Update detected language from server
-      if (data.detectedLanguage) {
-        setDetectedLanguage(data.detectedLanguage);
-      }
+        // Update detected language from server
+        if (metadata.detectedLanguage) {
+          setDetectedLanguage(metadata.detectedLanguage);
+        }
 
-      // Update chat mode for onboarding UI
-      if (data.mode) {
-        setChatMode(data.mode);
-      }
+        // Update chat mode for onboarding UI
+        if (metadata.mode) {
+          setChatMode(metadata.mode);
+        }
+      });
 
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMessageId
-            ? {
-                ...msg,
-                content: data.response,
-                isStreaming: false,
-              }
-            : msg
-        )
-      );
     } catch (error) {
       const currentLang = languageMode === 'manual' ? selectedLanguage : (detectedLanguage || 'en');
       setMessages((prev) =>
@@ -330,7 +414,7 @@ export default function ChatPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [sessionId, languageMode, selectedLanguage, detectedLanguage]);
+  }, [sessionId, languageMode, selectedLanguage, detectedLanguage, handleStreamingResponse]);
 
   // Get current suggestions based on mode
   const currentSuggestions = languageMode === 'manual' 
