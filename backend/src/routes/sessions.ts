@@ -35,6 +35,8 @@ router.get("/:id/history", async (req, res) => {
         role: m.role,
         content: m.content,
         timestamp: m.timestamp,
+        available_images: m.availableImages,
+        image_count: m.imageCount,
       })),
       count: messages.length,
     });

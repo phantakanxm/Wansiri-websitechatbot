@@ -14,15 +14,15 @@ interface OnboardingState {
 }
 
 const SERVICES = [
-  { code: "srs", name: { en: "SRS (Sex Reassignment Surgery)", th: "SRS (การผ่าตัดแปลงเพศ)", ko: "SRS (성전환 수술)" } },
-  { code: "consultation", name: { en: "Consultation Only", th: "ปรึกษาก่อนตัดสินใจ", ko: "상담" } },
+  { code: "srs", name: { en: "SRS (Sex Reassignment Surgery)", th: "SRS (การผ่าตัดแปลงเพศ)", ko: "SRS (성전환 수술)", zh: "SRS (性别重置手术)" } },
+  { code: "consultation", name: { en: "Consultation Only", th: "ปรึกษาก่อนตัดสินใจ", ko: "상담", zh: "仅咨询" } },
 ];
 
 const COUNTRIES = [
-  { code: "thailand", name: { en: "🇹🇭 Thailand", th: "🇹🇭 ไทย", ko: "🇹🇭 태국" } },
-  { code: "korea", name: { en: "🇰🇷 Korea", th: "🇰🇷 เกาหลี", ko: "🇰🇷 한국" } },
-  { code: "english", name: { en: "🇬🇧 UK/English", th: "🇬🇧 อังกฤษ", ko: "🇬🇧 영국" } },
-  { code: "other", name: { en: "🌏 Other", th: "🌏 อื่นๆ", ko: "🌏 기타" } },
+  { code: "thailand", name: { en: "🇹🇭 Thailand", th: "🇹🇭 ไทย", ko: "🇹🇭 태국", zh: "🇹🇭 泰国" } },
+  { code: "korea", name: { en: "🇰🇷 Korea", th: "🇰🇷 เกาหลี", ko: "🇰🇷 한국", zh: "🇰🇷 韩国" } },
+  { code: "english", name: { en: "🇬🇧 UK/English", th: "🇬🇧 อังกฤษ", ko: "🇬🇧 영국", zh: "🇬🇧 英国" } },
+  { code: "other", name: { en: "🌏 Other", th: "🌏 อื่นๆ", ko: "🌏 기타", zh: "🌏 其他" } },
 ];
 
 /**
@@ -143,10 +143,12 @@ export function extractName(message: string): string | null {
   const patterns = [
     // English patterns
     /(?:^|\s)(?:i['']?m|my name is|i am|call me|name[\s:]+)\s+(.+?)(?:\s|$|[.!?,])/i,
-    // Thai patterns  
+    // Thai patterns
     /(?:ชื่อ|ฉันชื่อ|ผมชื่อ|ดิฉันชื่อ|หนูชื่อ|ชื่อเล่น|เรียก)\s*[:\s]*(.+?)(?:\s|$|[.!?,])/i,
     // Korean patterns
     /(?:이름|성함|제 이름은|저는)\s*[:\s]*(.+?)(?:\s|$|[.!?,])/i,
+    // Chinese patterns
+    /(?:我叫|我是|我的名字是|称呼我|姓名[：:]*)\s*[:\s]*(.+?)(?:\s|$|[。！？，])/i,
     // Simple: just the name if it's 2-30 chars
     /^[\p{L}\s'-]{2,30}$/u,
   ];
@@ -177,17 +179,18 @@ export function isValidName(name: string): boolean {
   if (!/[\p{L}]/u.test(name)) return false;
   
   // Should not be all numbers or symbols
-  if (!/[a-zA-Z\u0E00-\u0E7F\uAC00-\uD7AF]/u.test(name)) return false;
+  // Support Thai, English, Korean, and Chinese characters
+  if (!/[a-zA-Z\u0E00-\u0E7F\uAC00-\uD7AF\u4e00-\u9fff]/u.test(name)) return false;
   
   return true;
 }
 
 /**
- * สร้างข้อความถามชื่อ (3 ภาษา)
+ * สร้างข้อความถามชื่อ (4 ภาษา)
  */
-export function askForName(lang: "en" | "th" | "ko" = "en", isRetry: boolean = false): string {
+export function askForName(lang: "en" | "th" | "ko" | "zh" = "en", isRetry: boolean = false): string {
   const messages = {
-    en: isRetry 
+    en: isRetry
       ? `Sorry, I didn't quite get that. Could you please tell me your name?
 
 [You can type "skip" to remain anonymous]`
@@ -196,7 +199,7 @@ export function askForName(lang: "en" | "th" | "ko" = "en", isRetry: boolean = f
 May I know your name? This helps me personalize our conversation.
 
 [You can type "skip" if you prefer to remain anonymous]`,
-    
+
     th: isRetry
       ? `ขอโทษค่ะ ฉันไม่เข้าใจ กรุณาบอกชื่อของคุณอีกครั้งได้ไหมคะ?
 
@@ -206,7 +209,7 @@ May I know your name? This helps me personalize our conversation.
 ขอทราบชื่อของคุณหน่อยได้ไหมคะ? เพื่อให้การสนทนาเป็นกันเองมากขึ้น
 
 [พิมพ์ "ข้าม" หากไม่สะดวกบอกชื่อ]`,
-    
+
     ko: isRetry
       ? `죄송합니다. 이름을 다시 알려주시겠어요?
 
@@ -216,17 +219,27 @@ May I know your name? This helps me personalize our conversation.
 성함을 알려주시겠어요? 더 나은 상담을 위해 도움이 됩니다.
 
 [익명을 원하시면 "걸너뛰기"를 입력하세요]`,
+
+    zh: isRetry
+      ? `抱歉，我没听清楚。请告诉我您的名字好吗？
+
+[您可以输入"跳过"保持匿名]`
+      : `👋 您好！我是Wansiri医院的助手。
+
+请问您叫什么名字？这有助于我为您提供更个性化的服务。
+
+[如果您希望保持匿名，可以输入"跳过"]`,
   };
-  
+
   return messages[lang];
 }
 
 /**
  * สร้างข้อความถามประเทศ
  */
-export function askForCountry(name: string, lang: "en" | "th" | "ko" = "en"): string {
+export function askForCountry(name: string, lang: "en" | "th" | "ko" | "zh" = "en"): string {
   const countryList = COUNTRIES.map((c, i) => `${i + 1}. ${c.name[lang]}`).join("\n");
-  
+
   const messages = {
     en: `Nice to meet you, ${name}! 😊
 
@@ -235,7 +248,7 @@ Which country are you from?
 ${countryList}
 
 [Please type the number 1-4]`,
-    
+
     th: `ยินดีที่ได้รู้จักคุณ${name}ค่ะ! 😊
 
 คุณมาจากประเทศไหนคะ?
@@ -243,7 +256,7 @@ ${countryList}
 ${countryList}
 
 [กรุณาพิมพ์ตัวเลข 1-4]`,
-    
+
     ko: `만나서 반갑습니다, ${name}님! 😊
 
 어느 나라에서 오셨나요?
@@ -251,26 +264,34 @@ ${countryList}
 ${countryList}
 
 [번호 1-4를 입력해주세요]`,
+
+    zh: `很高兴认识您，${name}！😊
+
+您来自哪个国家？
+
+${countryList}
+
+[请输入数字 1-4]`,
   };
-  
+
   return messages[lang];
 }
 
 /**
  * สร้างข้อความถามบริการที่สนใจ
  */
-export function askForService(name: string, lang: "en" | "th" | "ko" = "en"): string {
+export function askForService(name: string, lang: "en" | "th" | "ko" | "zh" = "en"): string {
   const serviceList = SERVICES.map((s, i) => `${i + 1}. ${s.name[lang]}`).join("\n");
-  
+
   const messages = {
-    en: `Thank you, ${name}! 
+    en: `Thank you, ${name}!
 
 Which procedure are you interested in?
 
 ${serviceList}
 
 [You can select multiple by typing numbers separated by comma, e.g., "1,2"]`,
-    
+
     th: `ขอบคุณค่ะคุณ${name}!
 
 คุณสนใจบริการไหนคะ?
@@ -278,7 +299,7 @@ ${serviceList}
 ${serviceList}
 
 [เลือกหลายรายการได้โดยพิมพ์ตัวเลขคั่นด้วยลูกน้ำ เช่น "1,2"]`,
-    
+
     ko: `감사합니다, ${name}님!
 
 어떤 시술에 관심이 있으신가요?
@@ -286,17 +307,25 @@ ${serviceList}
 ${serviceList}
 
 [여러 개 선택하려면 쉼표로 구분하여 번호를 입력하세요. 예: "1,2"]`,
+
+    zh: `谢谢您，${name}！
+
+您对哪个项目感兴趣？
+
+${serviceList}
+
+[您可以通过逗号分隔输入多个数字来选择多项，例如："1,2"]`,
   };
-  
+
   return messages[lang];
 }
 
 /**
  * สร้างข้อความถามช่องทางติดต่อ
  */
-export function askForContact(name: string, lang: "en" | "th" | "ko" = "en"): string {
+export function askForContact(name: string, lang: "en" | "th" | "ko" | "zh" = "en"): string {
   const messages = {
-    en: `Great, ${name}! 
+    en: `Great, ${name}!
 
 What's your preferred contact method for our staff to follow up?
 
@@ -308,7 +337,7 @@ What's your preferred contact method for our staff to follow up?
 
 [Please type your choice and your contact info]
 Example: "WhatsApp +1234567890"`,
-    
+
     th: `เยี่ยมเลยค่ะคุณ${name}!
 
 คุณสะดวกให้เจ้าหน้าที่ติดต่อกลับทางไหนคะ?
@@ -321,7 +350,7 @@ Example: "WhatsApp +1234567890"`,
 
 [กรุณาพิมพ์ช่องทางและข้อมูลติดต่อ]
 ตัวอย่าง: "WhatsApp +66123456789"`,
-    
+
     ko: `좋습니다, ${name}님!
 
 상담원이 연락드릴 연락처를 알려주세요.
@@ -334,35 +363,54 @@ Example: "WhatsApp +1234567890"`,
 
 [연락 방법과 연락처를 입력해주세요]
 예시: "WhatsApp +821012345678"`,
+
+    zh: `太好了，${name}！
+
+您希望我们通过什么方式联系您？
+
+📧 电子邮件
+📱 WhatsApp
+💬 Line
+💬 KakaoTalk
+💬 微信
+
+[请输入您选择的联系方式和联系信息]
+示例："WhatsApp +8612345678901"`,
   };
-  
+
   return messages[lang];
 }
 
 /**
  * สร้างข้อความขอบคุณเมื่อเสร็จสิ้น
  */
-export function thankYouMessage(name: string, lang: "en" | "th" | "ko" = "en"): string {
+export function thankYouMessage(name: string, lang: "en" | "th" | "ko" | "zh" = "en"): string {
   const messages = {
     en: `Thank you, ${name}! 🎉
 
 Our team will contact you within 24 hours.
 
 In the meantime, feel free to ask me any questions about our services!`,
-    
+
     th: `ขอบคุณค่ะคุณ${name}! 🎉
 
 ทีมงานของเราจะติดต่อกลับภายใน 24 ชั่วโมง
 
 ระหว่างนี้ถ้ามีคำถามเกี่ยวกับบริการ สามารถสอบถามฉันได้เลยค่ะ!`,
-    
+
     ko: `감사합니다, ${name}님! 🎉
 
 24시간 이내에 담당자가 연락드리겠습니다.
 
 그동안 서비스에 대해 궁금한 점이 있으시면 언제든지 물어보세요!`,
+
+    zh: `谢谢您，${name}！🎉
+
+我们的团队将在24小时内与您联系。
+
+在此期间，如果您对我们的服务有任何疑问，请随时问我！`,
   };
-  
+
   return messages[lang];
 }
 
@@ -371,13 +419,13 @@ In the meantime, feel free to ask me any questions about our services!`,
  */
 async function getSessionUuid(sessionKey: string): Promise<string | null> {
   if (!isSupabaseEnabled()) return null;
-  
+
   const { data } = await supabase!
     .from("sessions")
     .select("id")
     .eq("session_key", sessionKey)
     .single();
-  
+
   return data?.id || null;
 }
 
@@ -387,22 +435,22 @@ async function getSessionUuid(sessionKey: string): Promise<string | null> {
 async function getOrCreateOnboarding(sessionKey: string) {
   const sessionUuid = await getSessionUuid(sessionKey);
   if (!sessionUuid) return null;
-  
+
   const { data: existing } = await supabase!
     .from("onboarding_sessions")
     .select("*")
     .eq("session_id", sessionUuid)
     .single();
-  
+
   if (existing) return existing;
-  
+
   // สร้างใหม่
   const { data: created } = await supabase!
     .from("onboarding_sessions")
     .insert({ session_id: sessionUuid, step: "asked_name" })
     .select()
     .single();
-  
+
   return created;
 }
 
@@ -419,7 +467,7 @@ export async function savePatientName(sessionId: string, rawMessage: string): Pr
 
     // Try to extract name from message
     let extractedName = extractName(rawMessage);
-    
+
     // If extraction failed or invalid, use raw message
     if (!extractedName || !isValidName(extractedName)) {
       // Check if it's skip message
@@ -435,12 +483,12 @@ export async function savePatientName(sessionId: string, rawMessage: string): Pr
 
     await supabase!
       .from("onboarding_sessions")
-      .update({ 
+      .update({
         patient_name: extractedName,
         step: "asked_country"
       })
       .eq("id", onboarding.id);
-    
+
     return extractedName;
   } catch (error) {
     console.error("[Onboarding] Error saving name:", error);
@@ -466,7 +514,7 @@ export async function saveNationality(sessionId: string, country: string): Promi
       if (selectedCountry) {
         await supabase!
           .from("onboarding_sessions")
-          .update({ 
+          .update({
             nationality: selectedCountry.code,
             step: "asked_service"
           })
@@ -483,6 +531,7 @@ export async function saveNationality(sessionId: string, country: string): Promi
       "เกาหลี": "korea",
       "เกาหลีใต้": "korea",
       "한국": "korea",
+      "韩国": "korea",
       "uk": "english",
       "united kingdom": "english",
       "british": "english",
@@ -490,17 +539,21 @@ export async function saveNationality(sessionId: string, country: string): Promi
       "english": "english",
       "อังกฤษ": "english",
       "영국": "english",
+      "英国": "english",
       "thailand": "thailand",
       "ไทย": "thailand",
       "태국": "thailand",
       "thai": "thailand",
+      "泰国": "thailand",
+      "中国": "other",
+      "จีน": "other",
     };
 
     const normalizedCountry = countryMap[country.toLowerCase().trim()] || "other";
 
     await supabase!
       .from("onboarding_sessions")
-      .update({ 
+      .update({
         nationality: normalizedCountry,
         step: "asked_service"
       })
@@ -514,7 +567,7 @@ export async function saveNationality(sessionId: string, country: string): Promi
  * บันทึกบริการที่สนใจ
  */
 export async function saveInterestedServices(
-  sessionId: string, 
+  sessionId: string,
   serviceIndices: number[]
 ): Promise<void> {
   if (!isSupabaseEnabled()) return;
@@ -529,7 +582,7 @@ export async function saveInterestedServices(
 
     await supabase!
       .from("onboarding_sessions")
-      .update({ 
+      .update({
         interested_services: serviceCodes,
         step: "asked_contact"
       })
@@ -543,7 +596,7 @@ export async function saveInterestedServices(
  * บันทึกช่องทางติดต่อ
  */
 export async function saveContactMethod(
-  sessionId: string, 
+  sessionId: string,
   method: string,
   contactInfo: string
 ): Promise<void> {
@@ -555,7 +608,7 @@ export async function saveContactMethod(
 
     await supabase!
       .from("onboarding_sessions")
-      .update({ 
+      .update({
         preferred_contact_method: method.toLowerCase(),
         contact_info: contactInfo,
         step: "completed"
@@ -641,11 +694,11 @@ export function parseServiceSelection(message: string): number[] | null {
   if (numbers) {
     return numbers.map(Number).filter(n => n >= 1 && n <= SERVICES.length);
   }
-  
+
   // Check for service names
   const lowerMsg = message.toLowerCase();
   const foundServices: number[] = [];
-  
+
   SERVICES.forEach((service, index) => {
     if (lowerMsg.includes(service.code.replace("_", " "))) {
       foundServices.push(index + 1);
@@ -657,7 +710,7 @@ export function parseServiceSelection(message: string): number[] | null {
       }
     });
   });
-  
+
   return foundServices.length > 0 ? [...new Set(foundServices)] : null;
 }
 
@@ -665,7 +718,7 @@ export function parseServiceSelection(message: string): number[] | null {
  * ตรวจสอบว่าข้อความเป็นการข้ามหรือไม่
  */
 export function isSkipMessage(message: string): boolean {
-  const skipWords = ["skip", "ข้าม", "걸너뛰기", "pass", "no", "ไม่", "아니"];
+  const skipWords = ["skip", "ข้าม", "걸너뛰기", "跳过", "pass", "no", "ไม่", "아니", "不"];
   return skipWords.some(word => message.toLowerCase().includes(word));
 }
 

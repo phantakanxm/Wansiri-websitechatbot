@@ -9,6 +9,8 @@ interface Message {
   role: "user" | "model";
   content: string;
   timestamp: number;
+  availableImages?: { url: string; caption?: string }[];
+  imageCount?: number;
 }
 
 interface Session {
@@ -43,7 +45,7 @@ export async function getSession(sessionId: string): Promise<Session> {
         // Fetch messages for this session
         const { data: messagesData, error: msgError } = await supabase!
           .from("messages")
-          .select("role, content, created_at")
+          .select("role, content, created_at, available_images, image_count")
           .eq("session_id", sessionData.id)
           .order("created_at", { ascending: true });
 
@@ -51,10 +53,12 @@ export async function getSession(sessionId: string): Promise<Session> {
           console.error("[Session] Error fetching messages:", msgError);
         }
 
-        const messages: Message[] = messagesData?.map((m) => ({
-          role: (m.role === "assistant" ? "model" : m.role) as "user" | "model", // Convert 'assistant' back to 'model'
+        const messages: Message[] = messagesData?.map((m: any) => ({
+          role: (m.role === "assistant" ? "model" : m.role) as "user" | "model",
           content: m.content,
           timestamp: new Date(m.created_at).getTime(),
+          availableImages: m.available_images,
+          imageCount: m.image_count,
         })) || [];
 
         // Update last_active_at
@@ -130,6 +134,8 @@ export async function addMessage(
     responseTimeMs?: number;
     cacheHit?: boolean;
     source?: string;
+    availableImages?: { url: string; caption?: string }[];
+    imageCount?: number;
   }
 ): Promise<void> {
   const session = await getSession(sessionId);
@@ -137,6 +143,8 @@ export async function addMessage(
     role,
     content,
     timestamp: Date.now(),
+    availableImages: metadata?.availableImages,
+    imageCount: metadata?.imageCount,
   });
   session.lastActivity = Date.now();
 
@@ -153,12 +161,14 @@ export async function addMessage(
       if (sessionData) {
         const { error } = await supabase!.from("messages").insert({
           session_id: sessionData.id,
-          role: role === "model" ? "assistant" : role, // Convert 'model' to 'assistant'
+          role: role === "model" ? "assistant" : role,
           content,
           language: metadata?.language,
           response_time_ms: metadata?.responseTimeMs,
           cache_hit: metadata?.cacheHit || false,
           source: metadata?.source || "api",
+          available_images: metadata?.availableImages,
+          image_count: metadata?.imageCount || 0,
         });
 
         if (error) {

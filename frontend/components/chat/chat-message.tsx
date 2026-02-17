@@ -3,11 +3,17 @@
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Copy, Check, Bot, User, RefreshCw } from 'lucide-react';
+import { Copy, Check, Bot, User, RefreshCw, ZoomIn, X, ImageIcon, ChevronDown, ChevronUp, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 import type { ChatMessage as MessageType } from '@/lib/chat-config';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ChatMessageProps {
   message: MessageType;
@@ -20,20 +26,28 @@ interface ChatMessageProps {
   language?: 'en' | 'th' | 'ko' | 'zh';
 }
 
-export function ChatMessage({ 
-  message, 
-  onRetry, 
-  onSkip, 
+export function ChatMessage({
+  message,
+  onRetry,
+  onSkip,
   onQuickReply,
-  showSkip, 
+  showSkip,
   showCountries,
   showServices,
   language = 'en'
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [showImages, setShowImages] = useState(false);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
   // Button labels based on language
+  const viewImagesLabels = {
+    en: { view: 'View images', hide: 'Hide images', count: (n: number) => `${n} photos` },
+    th: { view: 'ดูรูปประกอบ', hide: 'ซ่อนรูป', count: (n: number) => `${n} รูป` },
+    ko: { view: '사진 보기', hide: '사진 숨기기', count: (n: number) => `${n}장` },
+    zh: { view: '查看图片', hide: '隐藏图片', count: (n: number) => `${n}张` },
+  };
   const countryLabels = {
     en: { th: '🇹🇭 Thailand', kr: '🇰🇷 Korea', uk: '🇬🇧 UK/English', other: '🌏 Other' },
     th: { th: '🇹🇭 ไทย', kr: '🇰🇷 เกาหลี', uk: '🇬🇧 อังกฤษ', other: '🌏 อื่นๆ' },
@@ -50,6 +64,7 @@ export function ChatMessage({
 
   const labels = countryLabels[language] || countryLabels.en;
   const svcLabels = serviceLabels[language] || serviceLabels.en;
+  const imgLabels = viewImagesLabels[language] || viewImagesLabels.en;
 
   const copyToClipboard = async (code: string) => {
     await navigator.clipboard.writeText(code);
@@ -63,6 +78,10 @@ export function ChatMessage({
       minute: '2-digit',
     });
   };
+
+  // Get images array
+  const images = showImages ? message.availableImages : message.images;
+  const imageCount = images?.length || 0;
 
   return (
     <div
@@ -108,7 +127,7 @@ export function ChatMessage({
                   code({ inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     const code = String(children).replace(/\n$/, '');
-                    
+
                     if (!inline && match) {
                       return (
                         <div className="relative group/code">
@@ -172,7 +191,7 @@ export function ChatMessage({
             </div>
           )}
         </div>
-        
+
         {/* Quick Reply Buttons - Countries */}
         {!isUser && showCountries && onQuickReply && (
           <div className="mt-1 max-[390px]:mt-1 sm:mt-2 md:mt-3 grid grid-cols-2 gap-1 max-[390px]:gap-1 sm:gap-2">
@@ -232,12 +251,233 @@ export function ChatMessage({
             ⏭️ Skip → Anonymous
           </Button>
         )}
+
+        {/* ============================================
+            ENHANCED IMAGE BUTTONS & GALLERY
+            ============================================ */}
         
+        {/* View Images Button - Beautiful Gradient Button */}
+        {!isUser && message.availableImages && message.availableImages.length > 0 && !showImages && (
+          <button
+            onClick={() => setShowImages(true)}
+            className={cn(
+              "mt-2 sm:mt-3 group/btn relative overflow-hidden",
+              "flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3",
+              "rounded-xl sm:rounded-2xl",
+              "bg-gradient-to-r from-[#16bec9] via-[#14a8b2] to-[#16bec9]",
+              "text-white font-medium text-sm sm:text-base",
+              "shadow-lg shadow-[#16bec9]/25 hover:shadow-xl hover:shadow-[#16bec9]/30",
+              "transform hover:-translate-y-0.5 active:translate-y-0",
+              "transition-all duration-300 ease-out",
+              "border-0 outline-none focus:ring-2 focus:ring-[#16bec9]/50 focus:ring-offset-2"
+            )}
+          >
+            {/* Shine effect */}
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700" />
+            
+            {/* Icon */}
+            <span className="relative flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/20 backdrop-blur-sm">
+              <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </span>
+            
+            {/* Text */}
+            <span className="relative">{imgLabels.view}</span>
+            
+            {/* Count badge */}
+            <span className="relative flex items-center justify-center min-w-[24px] sm:min-w-[28px] h-5 sm:h-6 px-1.5 sm:px-2 rounded-full bg-white/20 backdrop-blur-sm text-xs sm:text-sm font-semibold">
+              {message.availableImages.length}
+            </span>
+            
+            {/* Arrow */}
+            <ChevronDown className="relative w-4 h-4 sm:w-5 sm:h-5 opacity-70 group-hover/btn:translate-y-0.5 transition-transform" />
+          </button>
+        )}
+
+        {/* Hide Images Button */}
+        {!isUser && message.availableImages && message.availableImages.length > 0 && showImages && (
+          <button
+            onClick={() => setShowImages(false)}
+            className={cn(
+              "mt-2 sm:mt-3 group/btn",
+              "flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5",
+              "rounded-xl sm:rounded-2xl",
+              "bg-muted/80 hover:bg-muted",
+              "text-muted-foreground hover:text-foreground font-medium text-sm",
+              "border border-border/50 hover:border-border",
+              "transition-all duration-200"
+            )}
+          >
+            <ChevronUp className="w-4 h-4" />
+            <span>{imgLabels.hide}</span>
+          </button>
+        )}
+
+        {/* Images Gallery - Beautiful Grid */}
+        {!isUser && images && imageCount > 0 && (
+          <>
+            <div className={cn(
+              "mt-3 sm:mt-4 w-full",
+              "p-2 sm:p-3 rounded-2xl bg-muted/30 border border-border/30"
+            )}>
+              <div className={cn(
+                "grid gap-2 sm:gap-3",
+                imageCount === 1 ? "grid-cols-1" :
+                imageCount === 2 ? "grid-cols-2" :
+                "grid-cols-2 sm:grid-cols-3"
+              )}>
+                {images.map((image, idx) => (
+                  <div 
+                    key={idx}
+                    onClick={() => setSelectedImageIndex(idx)}
+                    className={cn(
+                      "group/image relative cursor-pointer",
+                      "overflow-hidden rounded-xl sm:rounded-2xl",
+                      "bg-muted border border-border/30",
+                      "shadow-sm hover:shadow-md",
+                      "transition-all duration-300",
+                      imageCount === 1 ? "aspect-video" : "aspect-square"
+                    )}
+                  >
+                    {/* Image */}
+                    <img
+                      src={image.url}
+                      alt={image.caption || `Image ${idx + 1}`}
+                      className={cn(
+                        "w-full h-full object-cover",
+                        "transition-all duration-500 ease-out",
+                        "group-hover/image:scale-110"
+                      )}
+                      loading="lazy"
+                      onError={(e) => {
+                        console.error(`[ChatMessage] Failed to load image: ${image.url}`);
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                    
+                    {/* Hover Overlay */}
+                    <div className={cn(
+                      "absolute inset-0",
+                      "bg-gradient-to-t from-black/60 via-black/20 to-transparent",
+                      "opacity-0 group-hover/image:opacity-100",
+                      "transition-all duration-300"
+                    )}>
+                      {/* Zoom icon */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center transform scale-50 group-hover/image:scale-100 transition-transform duration-300">
+                          <ZoomIn className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                        </div>
+                      </div>
+                      
+                      {/* Caption preview */}
+                      {image.caption && (
+                        <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3">
+                          <p className="text-white text-xs sm:text-sm font-medium line-clamp-2 drop-shadow-lg">
+                            {image.caption}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Index badge */}
+                    <div className="absolute top-2 left-2 sm:top-3 sm:left-3">
+                      <span className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/40 backdrop-blur-sm text-white text-xs font-medium">
+                        {idx + 1}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              {/* Gallery footer hint */}
+              <div className="mt-2 sm:mt-3 flex items-center justify-center gap-2 text-muted-foreground/60 text-xs">
+                <Eye className="w-3 h-3" />
+                <span>คลิกที่รูปเพื่อดูขนาดใหญ่</span>
+              </div>
+            </div>
+
+            {/* Lightbox Dialog - Single Dialog for all images */}
+            <Dialog 
+              open={selectedImageIndex !== null} 
+              onOpenChange={(open) => {
+                if (!open) setSelectedImageIndex(null);
+              }}
+            >
+              <DialogContent 
+                className={cn(
+                  "max-w-[95vw] sm:max-w-4xl lg:max-w-5xl xl:max-w-6xl",
+                  "p-0 overflow-hidden",
+                  "bg-transparent",
+                  "border-0 shadow-none"
+                )}
+                onPointerDownOutside={() => setSelectedImageIndex(null)}
+              >
+                <DialogTitle className="sr-only">
+                  ดูรูปภาพ {selectedImageIndex !== null ? selectedImageIndex + 1 : ''} / {imageCount}
+                </DialogTitle>
+                {selectedImageIndex !== null && (
+                  <div className="relative flex flex-col items-center justify-center min-h-[50vh] max-h-[90vh]">
+                    {/* Close button - Fixed position */}
+                    <button 
+                      className="absolute -top-4 -right-4 sm:top-0 sm:right-0 z-[60] w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center text-white transition-colors shadow-lg"
+                      onClick={() => setSelectedImageIndex(null)}
+                      type="button"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    
+                    {/* Image number indicator */}
+                    <div className="absolute -top-4 left-0 sm:top-0 sm:left-0 z-50 px-4 py-2 rounded-full bg-black/60 backdrop-blur-sm">
+                      <span className="text-white text-sm font-medium">
+                        {selectedImageIndex + 1} / {imageCount}
+                      </span>
+                    </div>
+                    
+                    {/* Previous button */}
+                    {selectedImageIndex > 0 && (
+                      <button
+                        className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center text-white transition-colors shadow-lg"
+                        onClick={() => setSelectedImageIndex(prev => (prev !== null ? prev - 1 : 0))}
+                        type="button"
+                      >
+                        <ChevronLeft className="w-6 h-6 sm:w-7 sm:h-7" />
+                      </button>
+                    )}
+                    
+                    {/* Next button */}
+                    {selectedImageIndex < imageCount - 1 && (
+                      <button
+                        className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-50 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center text-white transition-colors shadow-lg"
+                        onClick={() => setSelectedImageIndex(prev => (prev !== null ? prev + 1 : 0))}
+                        type="button"
+                      >
+                        <ChevronRight className="w-6 h-6 sm:w-7 sm:h-7" />
+                      </button>
+                    )}
+                    
+                    {/* Main Image */}
+                    <div className="w-full h-full flex items-center justify-center px-12 sm:px-16">
+                      <img
+                        src={images[selectedImageIndex]?.url}
+                        alt={images[selectedImageIndex]?.caption || `Image ${selectedImageIndex + 1}`}
+                        className="max-w-full max-h-[80vh] sm:max-h-[85vh] w-auto h-auto object-contain rounded-lg shadow-2xl"
+                        onError={(e) => {
+                          console.error(`[ChatMessage] Failed to load image in dialog: ${images[selectedImageIndex]?.url}`);
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
+
         {/* Timestamp */}
         <span className="text-xs text-muted-foreground px-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {formatTime(message.timestamp)}
         </span>
-        
+
         {/* Error message with retry */}
         {message.error && (
           <div className="flex items-center gap-2 px-1">

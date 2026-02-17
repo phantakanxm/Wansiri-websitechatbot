@@ -115,6 +115,7 @@ export function useChat(options: UseChatOptions = {}): UseChatReturn {
         ...assistantPlaceholder,
         content: data.response || data.message || '',
         isStreaming: false,
+        images: data.images || [],
       };
 
       setMessages((prev) =>

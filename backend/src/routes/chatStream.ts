@@ -41,31 +41,40 @@ router.post("/", async (req, res) => {
     // Generate response
     const result = await generateChatResponseWithHistory(message, history, forceLanguage);
 
-    // Stream response in chunks (simulate streaming)
-    const words = result.response.split(' ');
+    // Stream response in chunks - use character chunks for Thai text safety
+    const CHUNK_SIZE = 8; // Characters per chunk (safer for Thai combining characters)
     let streamedContent = '';
-
-    for (let i = 0; i < words.length; i++) {
-      streamedContent += (i > 0 ? ' ' : '') + words[i];
+    
+    for (let i = 0; i < result.response.length; i += CHUNK_SIZE) {
+      const chunk = result.response.slice(i, i + CHUNK_SIZE);
+      streamedContent += chunk;
+      const isLast = i + CHUNK_SIZE >= result.response.length;
       
       res.write(`data: ${JSON.stringify({ 
         type: 'chunk', 
         content: streamedContent,
-        isComplete: i === words.length - 1
+        isComplete: isLast
       })}\n\n`);
 
       // Small delay between chunks for natural feel
-      if (i < words.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 50));
+      if (!isLast) {
+        await new Promise(resolve => setTimeout(resolve, 15));
       }
     }
 
-    // Send final metadata
+    // Send final metadata with availableImages (not displayed immediately)
+    console.log("[ChatStream] Sending complete event with availableImages:", result.availableImages?.length || 0);
+    if (result.availableImages && result.availableImages.length > 0) {
+      console.log("[ChatStream] Available image URLs:", result.availableImages.map(img => img.url.substring(0, 50) + "..."));
+    }
+    
     res.write(`data: ${JSON.stringify({ 
       type: 'complete', 
       detectedLanguage: result.detectedLang,
       targetLanguage: result.targetLang,
-      responseTime: result.responseTime 
+      responseTime: result.responseTime,
+      availableImages: result.availableImages || [],
+      imageCount: result.imageCount || 0
     })}\n\n`);
 
     // Save to session (now async)
@@ -76,6 +85,8 @@ router.post("/", async (req, res) => {
     await addMessage(sid, "model", result.response, {
       language: result.targetLang,
       source: "stream",
+      availableImages: result.availableImages,
+      imageCount: result.imageCount,
     });
 
     res.end();

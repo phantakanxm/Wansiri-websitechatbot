@@ -50,7 +50,7 @@ router.post("/", async (req, res) => {
     // Check if this is first message - need onboarding
     const onboardingState = await getOnboardingState(sid);
     const detectedLang = await detectLanguage(message);
-    const lang: "en" | "th" | "ko" = ["th", "ko"].includes(detectedLang) ? detectedLang as "th" | "ko" : "en";
+    const lang: "en" | "th" | "ko" | "zh" = (["th", "ko", "zh"].includes(detectedLang) ? detectedLang : "en") as "th" | "ko" | "zh" | "en";
     
     // Handle "start" message (trigger from frontend for new session)
     const isStartMessage = message.toLowerCase().trim() === 'start';
@@ -258,6 +258,8 @@ router.post("/", async (req, res) => {
       language: result.targetLang,
       responseTimeMs: responseTime,
       source: "api",
+      availableImages: result.availableImages,
+      imageCount: result.imageCount,
     });
     
     // Record analytics
@@ -276,6 +278,7 @@ router.post("/", async (req, res) => {
     console.log("[API] Mode used:", effectiveMode);
     console.log("[API] Response length:", result.response?.length || 0);
     console.log("[API] Response preview:", result.response?.substring(0, 100) + (result.response?.length > 100 ? "..." : ""));
+    console.log("[API] Available images:", result.availableImages?.length || 0);
     console.log("[API] Chat response sent successfully");
 
     res.json({ 
@@ -287,6 +290,8 @@ router.post("/", async (req, res) => {
       translatedQuery: result.translatedQuery,
       mode: effectiveMode,
       selectedLanguage: selectedLanguage || null,
+      availableImages: result.availableImages || [],
+      imageCount: result.imageCount || 0,
     });
   } catch (error) {
     const responseTime = Date.now() - startTime;

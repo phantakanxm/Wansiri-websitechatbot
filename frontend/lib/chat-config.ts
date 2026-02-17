@@ -30,6 +30,11 @@ export interface ChatConfig {
 
 export type MessageRole = 'user' | 'assistant' | 'system';
 
+export interface ChatMessageImage {
+  url: string;
+  caption?: string;
+}
+
 export interface ChatMessage {
   /** Unique message ID */
   id: string;
@@ -43,6 +48,12 @@ export interface ChatMessage {
   isStreaming?: boolean;
   /** Error state */
   error?: boolean;
+  /** Attached images from PDF (shown when user clicks) */
+  images?: ChatMessageImage[];
+  /** Available images that can be shown (not yet displayed) */
+  availableImages?: ChatMessageImage[];
+  /** Number of available images */
+  imageCount?: number;
 }
 
 // ========================================

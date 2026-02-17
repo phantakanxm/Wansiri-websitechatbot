@@ -15,6 +15,7 @@ import {
   Sun,
   Stethoscope,
   BarChart3,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/admin/dashboard", icon: BarChart3, key: "analytics", label: "Analytics" },
   { href: "/admin/leads", icon: UserPlus, key: "leads", label: "Leads" },
   { href: "/admin/documents", icon: FileText, key: "documents", label: "Documents" },
+  { href: "/admin/images", icon: ImageIcon, key: "images", label: "Images" },
 ];
 
 // Theme Toggle Component

@@ -2,11 +2,23 @@ import { ai, FILE_SEARCH_STORE_NAME, CHAT_MODEL } from "./gemini";
 import { detectLanguage, translateText, SupportedLanguage } from "./language";
 import { withRetry, RETRY_CONFIGS } from "./retry";
 import { performFileSearchWithCache, getFileSearchCacheStats } from "./fileSearchCache";
+import { enhanceResponseWithImages, isImageQuery, searchImagesByResponse } from "./imageSearch";
 
 interface ChatMessage {
   role: "user" | "model";
   content: string;
   timestamp: number;
+}
+
+interface ChatResponseWithImages {
+  response: string;
+  detectedLang: SupportedLanguage;
+  targetLang: SupportedLanguage;
+  translatedQuery?: string;
+  responseTime?: number;
+  fromCache?: boolean;
+  availableImages?: { url: string; caption?: string }[];
+  imageCount?: number;
 }
 
 /**
@@ -81,7 +93,7 @@ export async function generateChatResponseWithHistory(
   userQuestion: string,
   history: ChatMessage[],
   forceLanguage?: SupportedLanguage
-): Promise<{ response: string; detectedLang: SupportedLanguage; targetLang: SupportedLanguage; translatedQuery?: string; responseTime?: number; fromCache?: boolean }> {
+): Promise<ChatResponseWithImages> {
   
   const startTime = Date.now();
   
@@ -174,11 +186,35 @@ export async function generateChatResponseWithHistory(
     console.log("[Chat] DEBUG - Text:", finalResponse);
   }
 
+  // 8. Search for relevant images - ALWAYS check after getting AI response
+  // This searches based on AI response content (caption 70%, extracted text 30%)
+  let availableImages: { url: string; caption?: string }[] = [];
+  
+  // Search images based on the AI response text
+  // This finds images that match what AI is talking about
+  const imageStart = Date.now();
+  const imageResult = await searchImagesByResponse(finalResponse, { maxResults: 5 });
+  availableImages = imageResult.images.map(img => ({
+    url: img.storageUrl,
+    caption: img.caption,
+  }));
+  console.log(`[Chat] Image search by response time: ${Date.now() - imageStart}ms, found ${availableImages.length} images`);
+  
+  // Also search by original query as fallback (for explicit image requests)
+  if (availableImages.length === 0 && (isImageQuery(userQuestion) || isImageQuery(searchQuery))) {
+    console.log("[Chat] No images from response, trying keyword search...");
+    const keywordStart = Date.now();
+    const enhanced = await enhanceResponseWithImages(finalResponse, searchQuery, 5);
+    availableImages = enhanced.images;
+    console.log(`[Chat] Keyword image search time: ${Date.now() - keywordStart}ms, found ${availableImages.length} images`);
+  }
+
   const totalTime = Date.now() - startTime;
   console.log("[Chat] ✅ Total response time:", totalTime, "ms");
   console.log("[Chat] DEBUG - Final response length:", finalResponse?.length || 0);
   console.log("[Chat] DEBUG - Final response:", finalResponse);
   console.log("[Chat] DEBUG - Last 50 chars:", finalResponse?.slice(-50));
+  console.log("[Chat] DEBUG - Available images:", availableImages.length);
   console.log("========================================\n");
 
   return {
@@ -188,6 +224,8 @@ export async function generateChatResponseWithHistory(
     translatedQuery: inputLang !== "th" ? searchQuery : undefined,
     responseTime: totalTime,
     fromCache: searchResult.fromCache,
+    availableImages: availableImages.length > 0 ? availableImages : undefined,
+    imageCount: availableImages.length,
   };
 }
 

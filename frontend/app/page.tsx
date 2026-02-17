@@ -99,6 +99,8 @@ export default function ChatPage() {
           role: m.role === 'assistant' || m.role === 'model' ? 'assistant' : 'user',
           content: m.content,
           timestamp: new Date(m.timestamp || m.created_at),
+          availableImages: m.available_images || m.availableImages,
+          imageCount: m.image_count || m.imageCount,
         }));
         setMessages(formattedMessages);
         setMessageCount(formattedMessages.length);
@@ -122,7 +124,7 @@ export default function ChatPage() {
 
     const decoder = new TextDecoder();
     let accumulatedContent = '';
-    let metadata: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string } = {};
+    let metadata: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string; availableImages?: { url: string; caption?: string }[]; imageCount?: number } = {};
 
     try {
       while (true) {
@@ -168,7 +170,14 @@ export default function ChatPage() {
                 case 'complete':
                   // Final metadata
                   if (parsed.detectedLanguage) metadata.detectedLanguage = parsed.detectedLanguage;
-                  if (parsed.targetLanguage) metadata.mode = parsed.targetLanguage; // Using targetLanguage as mode indicator
+                  if (parsed.targetLanguage) metadata.mode = parsed.targetLanguage;
+                  if (parsed.availableImages) {
+                    metadata.availableImages = parsed.availableImages;
+                    console.log('[Chat] Received availableImages in complete event:', parsed.availableImages.length);
+                  }
+                  if (parsed.imageCount !== undefined) {
+                    metadata.imageCount = parsed.imageCount;
+                  }
                   break;
                   
                 case 'error':
@@ -190,6 +199,8 @@ export default function ChatPage() {
                   if (parsed.sessionId) metadata.sessionId = parsed.sessionId;
                   if (parsed.detectedLanguage) metadata.detectedLanguage = parsed.detectedLanguage;
                   if (parsed.mode) metadata.mode = parsed.mode;
+                  if (parsed.availableImages) metadata.availableImages = parsed.availableImages;
+                  if (parsed.imageCount !== undefined) metadata.imageCount = parsed.imageCount;
               }
               
             } catch (e) {
@@ -200,11 +211,12 @@ export default function ChatPage() {
         }
       }
 
-      // Mark streaming as complete
+      // Mark streaming as complete and attach availableImages if any
+      console.log('[Chat] Attaching availableImages to message:', metadata.availableImages?.length || 0);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
-            ? { ...msg, content: accumulatedContent, isStreaming: false }
+            ? { ...msg, content: accumulatedContent, isStreaming: false, availableImages: metadata.availableImages, imageCount: metadata.imageCount }
             : msg
         )
       );
