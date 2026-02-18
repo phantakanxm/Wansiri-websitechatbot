@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
+import * as fs from "fs";
+import * as path from "path";
+import { v4 as uuidv4 } from "uuid";
+import sharp from "sharp";
 
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -15,14 +19,16 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const apiKey = process.env.GEMINI_API_KEY || "";
 const ai = new GoogleGenAI({ apiKey });
 
+// Storage bucket name
+const STORAGE_BUCKET = "pdf-images";
+
 export interface SearchableImage {
   id: string;
-  pdfName: string;
-  pageNumber: number;
-  imageIndex: number;
+  category: string;
   storageUrl: string;
   caption?: string;
   extractedText?: string;
+  tags?: string[];
   relevanceScore?: number;
 }
 
@@ -32,78 +38,459 @@ export interface ImageSearchResult {
   query: string;
 }
 
-/**
- * Generate embedding for text using Gemini
- * NOTE: Currently disabled due to API issues, using keyword matching instead
- */
-async function generateTextEmbedding(text: string): Promise<number[] | null> {
-  // Temporarily disabled - Gemini embedding API has issues
-  // Using keyword matching as fallback in searchBySemantic
-  return null;
-
-  /* Original code (disabled):
-  try {
-    const response = await ai.models.embedContent({
-      model: "text-embedding-004",
-      contents: text,
-    });
-    const embedding = response.embeddings?.[0]?.values;
-    return embedding || null;
-  } catch (error) {
-    console.error("[ImageSearch] Error generating embedding:", error);
-    return null;
-  }
-  */
+export interface UploadImageResult {
+  success: boolean;
+  image?: SearchableImage;
+  error?: string;
 }
 
 /**
- * Extract keywords from text using Gemini 2.5 Flash
- * Returns important keywords/entities for image search matching
+ * ============================================
+ * Image Upload Functions
+ * ============================================
+ */
+
+/**
+ * Ensure storage bucket exists
+ */
+async function ensureBucketExists(): Promise<void> {
+  try {
+    const { data: buckets } = await supabase.storage.listBuckets();
+    const bucketExists = buckets?.some((b) => b.name === STORAGE_BUCKET);
+
+    if (!bucketExists) {
+      const { error } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+        public: true,
+        fileSizeLimit: 52428800,
+      });
+      if (error) {
+        console.error("[ImageUpload] Error creating bucket:", error);
+      } else {
+        console.log("[ImageUpload] Created bucket:", STORAGE_BUCKET);
+      }
+    }
+  } catch (error) {
+    console.error("[ImageUpload] Error checking bucket:", error);
+  }
+}
+
+/**
+ * Analyze image with Gemini Vision
+ */
+async function analyzeImageWithAI(imagePath: string): Promise<{
+  caption: string;
+  extractedText: string;
+  tags: string[];
+} | null> {
+  if (!ai) {
+    console.warn("[ImageUpload] Gemini AI not available");
+    return null;
+  }
+
+  try {
+    const imageBuffer = fs.readFileSync(imagePath);
+    const base64Image = imageBuffer.toString("base64");
+    const mimeType = "image/png";
+
+    console.log(`[ImageUpload] Analyzing image with Gemini...`);
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `Analyze this image and provide:
+1. Brief description/caption of what the image shows
+2. Any text visible in the image
+3. Relevant tags/keywords for searching (array of 5-10 tags)
+
+Respond in JSON format ONLY:
+{
+  "caption": "brief description",
+  "extractedText": "text in image",
+  "tags": ["tag1", "tag2", "tag3"]
+}`,
+            },
+            {
+              inlineData: { mimeType, data: base64Image },
+            },
+          ],
+        },
+      ],
+    });
+
+    const text = response.text;
+    if (!text) return null;
+
+    try {
+      const cleanText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const result = JSON.parse(cleanText);
+      return {
+        caption: result.caption || "",
+        extractedText: result.extractedText || "",
+        tags: result.tags || [],
+      };
+    } catch (parseError) {
+      console.error("[ImageUpload] Failed to parse AI response:", text);
+      return null;
+    }
+  } catch (error) {
+    console.error("[ImageUpload] Error analyzing image:", error);
+    return null;
+  }
+}
+
+/**
+ * Upload image directly with AI analysis
+ */
+export async function uploadImageDirect(
+  filePath: string,
+  originalFileName: string,
+  category: string = "general"
+): Promise<UploadImageResult> {
+  console.log(`[ImageUpload] Starting upload: ${originalFileName} [${category}]`);
+
+  try {
+    await ensureBucketExists();
+
+    const tempDir = path.join(process.cwd(), "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const optimizedPath = path.join(tempDir, `${uuidv4()}_opt.png`);
+
+    await sharp(filePath)
+      .resize(1920, 1920, { fit: "inside", withoutEnlargement: true })
+      .png({ quality: 90 })
+      .toFile(optimizedPath);
+
+    const fileExt = path.extname(originalFileName) || ".png";
+    const storageFileName = `${uuidv4()}_${originalFileName.replace(/[^a-zA-Z0-9]/g, "_")}${fileExt}`;
+    const fileContent = fs.readFileSync(optimizedPath);
+
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(storageFileName, fileContent, {
+        contentType: `image/${fileExt.replace(".", "") || "png"}`,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("[ImageUpload] Upload error:", uploadError);
+      fs.unlinkSync(optimizedPath);
+      return { success: false, error: uploadError.message };
+    }
+
+    const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storageFileName);
+    const storageUrl = urlData?.publicUrl;
+
+    if (!storageUrl) {
+      fs.unlinkSync(optimizedPath);
+      return { success: false, error: "Failed to get public URL" };
+    }
+
+    console.log(`[ImageUpload] Uploaded: ${storageUrl}`);
+
+    const analysis = await analyzeImageWithAI(optimizedPath);
+    const caption = analysis?.caption || "";
+    const extractedText = analysis?.extractedText || "";
+    const tags = analysis?.tags || [];
+
+    if (analysis) {
+      console.log(`[ImageUpload] AI Analysis: ${caption?.substring(0, 50)}...`);
+    }
+
+    const { data: insertedData, error: dbError } = await supabase
+      .from("images")
+      .insert({
+        storage_url: storageUrl,
+        filename: storageFileName,
+        category: category,
+        caption: caption,
+        extracted_text: extractedText,
+        tags: tags,
+        source_type: "upload",
+        source_name: originalFileName,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    fs.unlinkSync(optimizedPath);
+
+    if (dbError) {
+      console.error("[ImageUpload] DB error:", dbError);
+      return { success: false, error: dbError.message };
+    }
+
+    console.log(`[ImageUpload] Complete: ${originalFileName}`);
+
+    return {
+      success: true,
+      image: {
+        id: insertedData.id,
+        category: insertedData.category,
+        storageUrl: insertedData.storage_url,
+        caption: insertedData.caption,
+        extractedText: insertedData.extracted_text,
+        tags: insertedData.tags,
+      },
+    };
+  } catch (error) {
+    console.error("[ImageUpload] Error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * List all uploaded images
+ */
+export async function listUploadedImages(category?: string): Promise<SearchableImage[]> {
+  try {
+    let query = supabase
+      .from("images")
+      .select("*")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    if (category) {
+      query = query.eq("category", category);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("[ImageUpload] List error:", error);
+      return [];
+    }
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      category: item.category,
+      storageUrl: item.storage_url,
+      caption: item.caption,
+      extractedText: item.extracted_text,
+      tags: item.tags,
+    }));
+  } catch (error) {
+    console.error("[ImageUpload] List error:", error);
+    return [];
+  }
+}
+
+/**
+ * Delete a specific image by ID (soft delete)
+ */
+export async function deleteImageById(imageId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("images")
+      .update({ is_active: false })
+      .eq("id", imageId);
+
+    if (error) {
+      console.error("[ImageUpload] Delete error:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[ImageUpload] Delete error:", error);
+    return false;
+  }
+}
+
+/**
+ * List trashed (soft deleted) images
+ */
+export async function listTrashedImages(): Promise<SearchableImage[]> {
+  try {
+    const { data, error } = await supabase
+      .from("images")
+      .select("*")
+      .eq("is_active", false)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[ImageUpload] List trashed error:", error);
+      return [];
+    }
+
+    return (data || []).map((item: any) => ({
+      id: item.id,
+      category: item.category,
+      storageUrl: item.storage_url,
+      caption: item.caption,
+      extractedText: item.extracted_text,
+      tags: item.tags,
+    }));
+  } catch (error) {
+    console.error("[ImageUpload] List trashed error:", error);
+    return [];
+  }
+}
+
+/**
+ * Restore image from trash
+ */
+export async function restoreImage(imageId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from("images")
+      .update({ is_active: true })
+      .eq("id", imageId);
+
+    if (error) {
+      console.error("[ImageUpload] Restore error:", error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[ImageUpload] Restore error:", error);
+    return false;
+  }
+}
+
+/**
+ * Permanently delete image (hard delete)
+ */
+export async function permanentlyDeleteImage(imageId: string): Promise<boolean> {
+  try {
+    const { data: image, error: fetchError } = await supabase
+      .from("images")
+      .select("storage_url")
+      .eq("id", imageId)
+      .single();
+
+    if (fetchError || !image) {
+      console.error("[ImageUpload] Fetch error:", fetchError);
+      return false;
+    }
+
+    const url = new URL(image.storage_url);
+    const fileName = path.basename(url.pathname);
+    await supabase.storage.from(STORAGE_BUCKET).remove([fileName]);
+
+    const { error: deleteError } = await supabase
+      .from("images")
+      .delete()
+      .eq("id", imageId);
+
+    if (deleteError) {
+      console.error("[ImageUpload] Permanent delete error:", deleteError);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("[ImageUpload] Permanent delete error:", error);
+    return false;
+  }
+}
+
+/**
+ * ============================================
+ * AI Category Detection
+ * ============================================
+ */
+
+/**
+ * Detect image category from user query using Gemini AI
+ * Returns category code or null if general/uncertain
+ */
+async function detectCategoryWithAI(query: string): Promise<string | null> {
+  if (!ai) {
+    console.log("[ImageSearch] AI not available, skipping category detection");
+    return null;
+  }
+
+  try {
+    console.log(`[ImageSearch] AI detecting category for: "${query.substring(0, 50)}..."`);
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Analyze this user question and determine which image category it relates to.
+
+Available categories:
+- srs-tec: Surgical techniques, procedures, methods, how surgery is performed (e.g., "เทคนิคการผ่าตัด", "sigmoid", "colon", "graft")
+- srs-review: Reviews, results, before/after photos, patient cases, outcomes (e.g., "รีวิว", "ผลลัพธ์", "before/after", "เคส")
+- srs-doctor: Doctor information, surgeon profiles, medical staff (e.g., "หมอ", "แพทย์", "doctor", "surgeon")
+- srs-package: Pricing, packages, costs, fees, promotions (e.g., "ราคา", "แพ็คเกจ", "price", "cost")
+- srs-facility: Hospital, facility, room, equipment, location (e.g., "โรงพยาบาล", "ห้องผ่าตัด", "hospital", "facility")
+- general: General information, doesn't clearly fit above categories
+
+Respond with ONLY the category code (e.g., "srs-tec") or "general".
+If the query asks for images/photos/examples of a specific topic, determine the category based on the topic.
+
+User question: "${query.substring(0, 500)}"`,
+    });
+
+    const category = response.text?.trim().toLowerCase();
+    
+    const validCategories = ["srs-tec", "srs-review", "srs-doctor", "srs-package", "srs-facility"];
+    
+    if (category && validCategories.includes(category)) {
+      console.log(`[ImageSearch] AI detected category: ${category}`);
+      return category;
+    }
+    
+    console.log(`[ImageSearch] AI returned: ${category} (using general search)`);
+    return null;
+  } catch (error) {
+    console.error("[ImageSearch] Category detection error:", error);
+    return null;
+  }
+}
+
+/**
+ * ============================================
+ * Image Search Functions
+ * ============================================
+ */
+
+/**
+ * Extract keywords from text using Gemini
  */
 async function extractKeywords(text: string): Promise<string[]> {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Analyze this text and extract the most important keywords/entities that would be useful for searching related images.
+      contents: `Analyze this text and extract important keywords for image search.
 
-Return ONLY a JSON array of keywords (no markdown, no explanation):
+Return ONLY a JSON array:
 ["keyword1", "keyword2", "keyword3"]
 
-Focus on:
-- Medical procedures/techniques (e.g., "Graft Vaginoplasty", "Sigmoid", "SRS")
-- Body parts or anatomical terms
-- Treatment types
-- Specific medical terms mentioned
+Focus on: medical procedures, body parts, treatment types, specific terms.
 
 Text: "${text.substring(0, 1000)}"`,
     });
 
     const responseText = response.text?.trim() || "";
-
-    // Parse JSON array from response
     try {
-      // Remove markdown if present
       const cleanText = responseText.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
       const keywords = JSON.parse(cleanText);
-
-      if (Array.isArray(keywords) && keywords.length > 0) {
-        console.log("[ImageSearch] AI extracted keywords:", keywords);
+      if (Array.isArray(keywords)) {
         return keywords.map((k: string) => k.toLowerCase().trim());
       }
     } catch (parseError) {
-      console.log("[ImageSearch] Failed to parse AI keywords, using fallback:", responseText);
+      console.log("[ImageSearch] Failed to parse keywords");
     }
-
-    // Fallback: return empty array if parsing fails
     return [];
   } catch (error) {
-    console.error("[ImageSearch] AI keyword extraction error:", error);
+    console.error("[ImageSearch] Keyword extraction error:", error);
     return [];
   }
 }
 
 /**
- * Calculate relevance score between query and image metadata
+ * Calculate relevance score
  */
 function calculateRelevance(
   query: string,
@@ -113,362 +500,130 @@ function calculateRelevance(
   let score = 0;
   const normalizedQuery = query.toLowerCase();
 
-  // Score based on caption match
   if (image.caption) {
     const caption = image.caption.toLowerCase();
-    if (caption.includes(normalizedQuery)) {
-      score += 10;
-    }
-
+    if (caption.includes(normalizedQuery)) score += 10;
     for (const keyword of keywords) {
-      if (caption.includes(keyword.toLowerCase())) {
-        score += 3;
+      if (caption.includes(keyword.toLowerCase())) score += 3;
+    }
+  }
+
+  if (image.tags) {
+    for (const tag of image.tags) {
+      if (tag.toLowerCase().includes(normalizedQuery)) score += 5;
+      for (const keyword of keywords) {
+        if (tag.toLowerCase().includes(keyword.toLowerCase())) score += 2;
       }
     }
   }
 
-  // Score based on extracted text
   if (image.extractedText) {
     const text = image.extractedText.toLowerCase();
-    if (text.includes(normalizedQuery)) {
-      score += 8;
-    }
-
+    if (text.includes(normalizedQuery)) score += 8;
     for (const keyword of keywords) {
-      if (text.includes(keyword.toLowerCase())) {
-        score += 2;
-      }
+      if (text.includes(keyword.toLowerCase())) score += 2;
     }
-  }
-
-  // Score based on PDF name
-  if (image.pdfName) {
-    const pdfName = image.pdfName.toLowerCase();
-    for (const keyword of keywords) {
-      if (pdfName.includes(keyword.toLowerCase())) {
-        score += 2;
-      }
-    }
-  }
-
-  // Boost score for likely before/after images when query asks for results
-  if (
-    (normalizedQuery.includes("before") ||
-      normalizedQuery.includes("after") ||
-      normalizedQuery.includes("ผล") ||
-      normalizedQuery.includes("result")) &&
-    (image.caption?.toLowerCase().includes("before") ||
-      image.caption?.toLowerCase().includes("after") ||
-      image.caption?.toLowerCase().includes("ก่อน") ||
-      image.caption?.toLowerCase().includes("หลัง"))
-  ) {
-    score += 5;
   }
 
   return score;
 }
 
 /**
- * Search images by text query using keyword matching
- */
-async function searchByKeywords(query: string): Promise<SearchableImage[]> {
-  const keywords = await extractKeywords(query);
-  console.log("[ImageSearch] Extracted keywords:", keywords);
-
-  try {
-    // Build query conditions
-    const conditions: string[] = [];
-    const params: any = {};
-
-    // Search in caption
-    for (let i = 0; i < keywords.length; i++) {
-      conditions.push(`caption.ilike.%${keywords[i]}%`);
-    }
-
-    // Search in extracted text
-    for (let i = 0; i < keywords.length; i++) {
-      conditions.push(`extracted_text.ilike.%${keywords[i]}%`);
-    }
-
-    // Search in PDF name
-    for (let i = 0; i < keywords.length; i++) {
-      conditions.push(`pdf_name.ilike.%${keywords[i]}%`);
-    }
-
-    if (conditions.length === 0) {
-      return [];
-    }
-
-    // Query database
-    const { data, error } = await supabase
-      .from("pdf_images")
-      .select("*")
-      .or(conditions.join(","));
-
-    if (error) {
-      console.error("[ImageSearch] Database error:", error);
-      return [];
-    }
-
-    return (data || []).map((item: any) => ({
-      id: item.id,
-      pdfName: item.pdf_name,
-      pageNumber: item.page_number,
-      imageIndex: item.image_index,
-      storageUrl: item.storage_url,
-      caption: item.caption,
-      extractedText: item.extracted_text,
-    }));
-  } catch (error) {
-    console.error("[ImageSearch] Error in searchByKeywords:", error);
-    return [];
-  }
-}
-
-/**
- * Search images by text query using semantic similarity (via Gemini)
- */
-async function searchBySemantic(query: string): Promise<SearchableImage[]> {
-  try {
-    // Generate embedding for query
-    const queryEmbedding = await generateTextEmbedding(query);
-
-    if (!queryEmbedding) {
-      console.log("[ImageSearch] Could not generate embedding, falling back to keywords");
-      return [];
-    }
-
-    // Get all images with captions or extracted text
-    const { data, error } = await supabase
-      .from("pdf_images")
-      .select("*")
-      .not("caption", "is", null)
-      .limit(100);
-
-    if (error) {
-      console.error("[ImageSearch] Database error:", error);
-      return [];
-    }
-
-    // Calculate semantic similarity (simplified - in production, use vector DB)
-    const scoredImages: { image: SearchableImage; score: number }[] = [];
-
-    for (const item of data || []) {
-      const image: SearchableImage = {
-        id: item.id,
-        pdfName: item.pdf_name,
-        pageNumber: item.page_number,
-        imageIndex: item.image_index,
-        storageUrl: item.storage_url,
-        caption: item.caption,
-        extractedText: item.extracted_text,
-      };
-
-      // Use keyword matching as proxy for semantic search
-      const keywords = await extractKeywords(query);
-      const score = calculateRelevance(query, image, keywords);
-
-      if (score > 0) {
-        scoredImages.push({ image, score });
-      }
-    }
-
-    // Sort by score
-    scoredImages.sort((a, b) => b.score - a.score);
-
-    return scoredImages.slice(0, 10).map((si) => ({
-      ...si.image,
-      relevanceScore: si.score,
-    }));
-  } catch (error) {
-    console.error("[ImageSearch] Error in searchBySemantic:", error);
-    return [];
-  }
-}
-
-/**
- * Main search function - combines keyword and semantic search
+ * Search images by text query with AI category detection
  */
 export async function searchImagesByText(
   query: string,
   options: {
     maxResults?: number;
-    includePages?: number[];
-    pdfFilter?: string;
+    category?: string;
   } = {}
 ): Promise<ImageSearchResult> {
   console.log(`[ImageSearch] Searching for: "${query}"`);
 
   try {
-    // Try semantic search first
-    let images = await searchBySemantic(query);
-
-    // If no results, try keyword search
-    if (images.length === 0) {
-      images = await searchByKeywords(query);
+    // Step 1: Detect category using AI (if not manually specified)
+    let detectedCategory: string | undefined = options.category;
+    if (!detectedCategory) {
+      const aiCategory = await detectCategoryWithAI(query);
+      detectedCategory = aiCategory || undefined;
     }
 
-    // Apply filters
-    if (options.pdfFilter) {
-      images = images.filter((img) =>
-        img.pdfName.toLowerCase().includes(options.pdfFilter!.toLowerCase())
-      );
-    }
-
-    if (options.includePages && options.includePages.length > 0) {
-      images = images.filter((img) => options.includePages!.includes(img.pageNumber));
-    }
-
-    // Calculate relevance scores
+    // Step 2: Extract keywords for relevance scoring
     const keywords = await extractKeywords(query);
-    images = images.map((img) => ({
-      ...img,
-      relevanceScore: calculateRelevance(query, img, keywords),
-    }));
 
-    // Sort by relevance
-    images.sort((a, b) => (b.relevanceScore || 0) - (a.relevanceScore || 0));
+    // Step 3: Build database query with category filter
+    let dbQuery = supabase
+      .from("images")
+      .select("*")
+      .eq("is_active", true)
+      .not("caption", "is", null);
 
-    // Limit results
+    if (detectedCategory) {
+      dbQuery = dbQuery.eq("category", detectedCategory);
+      console.log(`[ImageSearch] Filtering by category: ${detectedCategory}`);
+    } else {
+      console.log(`[ImageSearch] No category filter, searching all images`);
+    }
+
+    const { data, error } = await dbQuery.limit(200);
+
+    if (error) {
+      console.error("[ImageSearch] Database error:", error);
+      return { images: [], totalFound: 0, query };
+    }
+
+    console.log(`[ImageSearch] Found ${data?.length || 0} images in database`);
+
+    // Step 4: Calculate relevance scores (but include ALL images in category)
+    const scoredImages: { image: SearchableImage; score: number }[] = [];
+
+    for (const item of data || []) {
+      const image: SearchableImage = {
+        id: item.id,
+        category: item.category,
+        storageUrl: item.storage_url,
+        caption: item.caption,
+        extractedText: item.extracted_text,
+        tags: item.tags,
+      };
+
+      const score = calculateRelevance(query, image, keywords);
+      // Include ALL images in category, even with score 0
+      scoredImages.push({ image, score });
+    }
+
+    scoredImages.sort((a, b) => b.score - a.score);
+
+    // Show all images in category, sorted by relevance (but limit by maxResults)
     const maxResults = options.maxResults || 5;
-    images = images.slice(0, maxResults);
+    const finalImages = scoredImages.slice(0, maxResults);
 
-    console.log(`[ImageSearch] Found ${images.length} images`);
+    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'})`);
+    
+    // Log scores for debugging
+    if (scoredImages.length > 0) {
+      console.log('[ImageSearch] Image scores:');
+      scoredImages.forEach((si, idx) => {
+        console.log(`  #${idx + 1}: score=${si.score}, caption="${si.image.caption?.substring(0, 40)}..."`);
+      });
+    }
 
     return {
-      images,
-      totalFound: images.length,
+      images: finalImages.map((si) => ({
+        ...si.image,
+        relevanceScore: si.score,
+      })),
+      totalFound: finalImages.length,
       query,
     };
   } catch (error) {
     console.error("[ImageSearch] Search error:", error);
-    return {
-      images: [],
-      totalFound: 0,
-      query,
-    };
+    return { images: [], totalFound: 0, query };
   }
 }
 
 /**
- * Get images by PDF name
- */
-export async function getImagesByPDF(pdfName: string): Promise<SearchableImage[]> {
-  try {
-    const { data, error } = await supabase
-      .from("pdf_images")
-      .select("*")
-      .eq("pdf_name", pdfName)
-      .order("page_number", { ascending: true })
-      .order("image_index", { ascending: true });
-
-    if (error) {
-      console.error("[ImageSearch] Error fetching images by PDF:", error);
-      return [];
-    }
-
-    return (data || []).map((item: any) => ({
-      id: item.id,
-      pdfName: item.pdf_name,
-      pageNumber: item.page_number,
-      imageIndex: item.image_index,
-      storageUrl: item.storage_url,
-      caption: item.caption,
-      extractedText: item.extracted_text,
-    }));
-  } catch (error) {
-    console.error("[ImageSearch] Error in getImagesByPDF:", error);
-    return [];
-  }
-}
-
-/**
- * Get images for specific pages
- */
-export async function getImagesByPages(
-  pdfName: string,
-  pageNumbers: number[]
-): Promise<SearchableImage[]> {
-  try {
-    const { data, error } = await supabase
-      .from("pdf_images")
-      .select("*")
-      .eq("pdf_name", pdfName)
-      .in("page_number", pageNumbers)
-      .order("page_number", { ascending: true })
-      .order("image_index", { ascending: true });
-
-    if (error) {
-      console.error("[ImageSearch] Error fetching images by pages:", error);
-      return [];
-    }
-
-    return (data || []).map((item: any) => ({
-      id: item.id,
-      pdfName: item.pdf_name,
-      pageNumber: item.page_number,
-      imageIndex: item.image_index,
-      storageUrl: item.storage_url,
-      caption: item.caption,
-      extractedText: item.extracted_text,
-    }));
-  } catch (error) {
-    console.error("[ImageSearch] Error in getImagesByPages:", error);
-    return [];
-  }
-}
-
-/**
- * Calculate relevance score between response text and image metadata
- * Caption has 60% weight, Extracted Text has 40% weight
- */
-function calculateRelevanceWithResponse(
-  responseText: string,
-  image: SearchableImage,
-  keywords: string[]
-): number {
-  let score = 0;
-  const normalizedResponse = responseText.toLowerCase();
-
-  // Caption matching (60% weight)
-  if (image.caption) {
-    const captionLower = image.caption.toLowerCase();
-
-    // Exact phrase match in caption (high score)
-    if (captionLower.includes(normalizedResponse)) {
-      score += 60;
-    }
-
-    // Keyword match in caption
-    for (const keyword of keywords) {
-      if (captionLower.includes(keyword.toLowerCase())) {
-        score += 12; // Each keyword match in caption adds 12 points
-      }
-    }
-  }
-
-  // Extracted text matching (40% weight)
-  if (image.extractedText) {
-    const textLower = image.extractedText.toLowerCase();
-
-    // Exact phrase match in extracted text
-    if (textLower.includes(normalizedResponse)) {
-      score += 40;
-    }
-
-    // Keyword match in extracted text
-    for (const keyword of keywords) {
-      if (textLower.includes(keyword.toLowerCase())) {
-        score += 8; // Each keyword match in extracted text adds 8 points
-      }
-    }
-  }
-
-  return score;
-}
-
-/**
- * Search images by AI response text - prioritizing caption (60%) over extracted text (40%)
+ * Search images by AI response text with AI category detection
  */
 export async function searchImagesByResponse(
   responseText: string,
@@ -480,83 +635,68 @@ export async function searchImagesByResponse(
   console.log(`[ImageSearch] Searching by response: "${responseText.substring(0, 50)}..."`);
 
   try {
-    // Extract keywords from response
-    const keywords = await extractKeywords(responseText);
-    console.log("[ImageSearch] Response keywords:", keywords);
+    // Step 1: Detect category using AI
+    const detectedCategory = await detectCategoryWithAI(responseText);
 
-    // Get all images with captions or extracted text
-    const { data, error } = await supabase
-      .from("pdf_images")
+    // Step 2: Extract keywords for relevance scoring
+    const keywords = await extractKeywords(responseText);
+
+    // Step 3: Build database query with category filter
+    let dbQuery = supabase
+      .from("images")
       .select("*")
-      .not("caption", "is", null)
-      .limit(200);
+      .eq("is_active", true)
+      .not("caption", "is", null);
+
+    if (detectedCategory) {
+      dbQuery = dbQuery.eq("category", detectedCategory);
+      console.log(`[ImageSearch] Filtering by category: ${detectedCategory}`);
+    } else {
+      console.log(`[ImageSearch] No category filter, searching all images`);
+    }
+
+    const { data, error } = await dbQuery.limit(200);
 
     if (error) {
       console.error("[ImageSearch] Database error:", error);
       return { images: [], totalFound: 0, query: responseText };
     }
 
-    // Calculate relevance scores
-    const scoredImages: { image: SearchableImage; score: number }[] = [];
+    console.log(`[ImageSearch] Found ${data?.length || 0} images in database`);
 
-    console.log(`[ImageSearch] Checking ${(data || []).length} total images in database`);
+    // Step 4: Calculate relevance scores (but include ALL images in category)
+    const scoredImages: { image: SearchableImage; score: number }[] = [];
 
     for (const item of data || []) {
       const image: SearchableImage = {
         id: item.id,
-        pdfName: item.pdf_name,
-        pageNumber: item.page_number,
-        imageIndex: item.image_index,
+        category: item.category,
         storageUrl: item.storage_url,
         caption: item.caption,
         extractedText: item.extracted_text,
+        tags: item.tags,
       };
 
-      const score = calculateRelevanceWithResponse(responseText, image, keywords);
-
-      // DEBUG: Log all images with their scores
-      if (score > 0) {
-        console.log(`[ImageSearch] Image ${image.id.substring(0, 8)}... score=${score}, caption="${image.caption?.substring(0, 40)}..."`);
-        scoredImages.push({ image, score });
-      }
+      const score = calculateRelevance(responseText, image, keywords);
+      // Include ALL images in category, even with score 0
+      scoredImages.push({ image, score });
     }
 
-    // Sort by score
     scoredImages.sort((a, b) => b.score - a.score);
 
-    console.log(`[ImageSearch] Total images with score > 0: ${scoredImages.length}`);
+    // Show all images in category, sorted by relevance (but limit by maxResults)
+    const maxResults = options.maxResults || 5;
+    const finalImages = scoredImages.slice(0, maxResults);
 
-    // Show all scored images sorted
-    scoredImages.forEach((si, idx) => {
-      console.log(`[ImageSearch] Rank #${idx + 1}: score=${si.score}, caption="${si.image.caption?.substring(0, 50)}..."`);
-    });
-
-    // Filter by minimum score if specified
-    const minScore = options.minScore || 10;
-    console.log(`[ImageSearch] Filtering with minScore=${minScore}`);
-
-    const filteredImages = scoredImages.filter((si) => si.score >= minScore);
-    console.log(`[ImageSearch] Images after filtering (score >= ${minScore}): ${filteredImages.length}`);
-
-    // Show filtered out images
-    const filteredOut = scoredImages.filter((si) => si.score < minScore);
-    if (filteredOut.length > 0) {
-      console.log(`[ImageSearch] Images filtered out (score < ${minScore}): ${filteredOut.length}`);
-      filteredOut.forEach((si, idx) => {
-        console.log(`[ImageSearch]   Filtered #${idx + 1}: score=${si.score}, caption="${si.image.caption?.substring(0, 40)}..."`);
+    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'})`);
+    
+    // Log scores for debugging
+    if (scoredImages.length > 0) {
+      console.log('[ImageSearch] Image scores:');
+      scoredImages.forEach((si, idx) => {
+        console.log(`  #${idx + 1}: score=${si.score}, category=${si.image.category}, caption="${si.image.caption?.substring(0, 40)}..."`);
       });
     }
-
-    // Limit results
-    const maxResults = options.maxResults || 5;
-    const finalImages = filteredImages.slice(0, maxResults);
-
-    console.log(`[ImageSearch] Final images returned: ${finalImages.length} (maxResults=${maxResults})`);
-
-    // Log top matches for debugging
-    finalImages.forEach((si, idx) => {
-      console.log(`[ImageSearch] Final Match #${idx + 1}: score=${si.score}, caption="${si.image.caption?.substring(0, 50)}..."`);
-    });
 
     return {
       images: finalImages.map((si) => ({
@@ -574,46 +714,12 @@ export async function searchImagesByResponse(
 
 export function isImageQuery(query: string): boolean {
   const normalizedQuery = query.toLowerCase();
-
   const imageIndicators = [
-    // Thai
-    "รูป",
-    "ภาพ",
-    "รูปภาพ",
-    "ตัวอย่าง",
-    "before",
-    "after",
-    "ก่อน",
-    "หลัง",
-    "ผลลัพธ์",
-    "เคส",
-    "case",
-    "รีวิว",
-    "ดู",
-    "เห็น",
-    "แสดง",
-    "ประกอบ",
-    "อธิบายด้วยรูป",
-    // English
-    "image",
-    "photo",
-    "picture",
-    "example",
-    "before",
-    "after",
-    "result",
-    "outcome",
-    "case",
-    "review",
-    "show",
-    "see",
-    "visual",
-    "diagram",
-    "illustration",
-    "with image",
-    "with picture",
+    "รูป", "ภาพ", "รูปภาพ", "ตัวอย่าง", "before", "after", "ก่อน", "หลัง",
+    "ผลลัพธ์", "เคส", "case", "รีวิว", "ดู", "เห็น", "แสดง", "ประกอบ",
+    "image", "photo", "picture", "example", "result", "outcome", "review",
+    "show", "see", "visual", "diagram", "illustration",
   ];
-
   return imageIndicators.some((indicator) =>
     normalizedQuery.includes(indicator.toLowerCase())
   );
@@ -630,7 +736,6 @@ export async function enhanceResponseWithImages(
   response: string;
   images: { url: string; caption?: string }[];
 }> {
-  // Only search for images if query indicates image interest
   if (!isImageQuery(query)) {
     return { response, images: [] };
   }
@@ -639,7 +744,7 @@ export async function enhanceResponseWithImages(
 
   const images = searchResult.images.map((img) => ({
     url: img.storageUrl,
-    caption: img.caption || `จากเอกสาร ${img.pdfName} หน้า ${img.pageNumber}`,
+    caption: img.caption || `จากหมวดหมู่ ${img.category}`,
   }));
 
   return { response, images };

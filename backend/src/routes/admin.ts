@@ -11,7 +11,10 @@ import {
   uploadImageDirect,
   listUploadedImages,
   deleteImageById,
-} from "../lib/pdfImageExtractor";
+  listTrashedImages,
+  restoreImage,
+  permanentlyDeleteImage,
+} from "../lib/imageSearch";
 
 const router = Router();
 
@@ -219,8 +222,7 @@ router.get("/images", async (req, res) => {
         url: img.storageUrl,
         caption: img.caption,
         extractedText: img.extractedText,
-        category: img.pdfName,
-        pageNumber: img.pageNumber,
+        category: img.category,
       })),
     });
   } catch (error) {
@@ -229,7 +231,7 @@ router.get("/images", async (req, res) => {
   }
 });
 
-// DELETE /api/admin/images/:id - Delete a specific image
+// DELETE /api/admin/images/:id - Delete a specific image (soft delete)
 router.delete("/images/:id", async (req, res) => {
   try {
     const imageId = req.params.id;
@@ -244,7 +246,7 @@ router.delete("/images/:id", async (req, res) => {
     if (success) {
       res.json({
         success: true,
-        message: "Image deleted successfully",
+        message: "Image moved to trash",
       });
     } else {
       res.status(500).json({
@@ -255,6 +257,90 @@ router.delete("/images/:id", async (req, res) => {
   } catch (error) {
     console.error("Delete Image API Error:", error);
     res.status(500).json({ error: "Failed to delete image" });
+  }
+});
+
+// ============================================
+// TRASH / RECYCLE BIN ENDPOINTS
+// ============================================
+
+// GET /api/admin/images/trash - List trashed images
+router.get("/images/trash", async (req, res) => {
+  try {
+    const images = await listTrashedImages();
+    
+    res.json({
+      success: true,
+      count: images.length,
+      images: images.map(img => ({
+        id: img.id,
+        url: img.storageUrl,
+        caption: img.caption,
+        extractedText: img.extractedText,
+        category: img.category,
+      })),
+    });
+  } catch (error) {
+    console.error("List Trashed Images API Error:", error);
+    res.status(500).json({ error: "Failed to list trashed images" });
+  }
+});
+
+// POST /api/admin/images/:id/restore - Restore image from trash
+router.post("/images/:id/restore", async (req, res) => {
+  try {
+    const imageId = req.params.id;
+    
+    if (!imageId) {
+      res.status(400).json({ error: "Image ID is required" });
+      return;
+    }
+
+    const success = await restoreImage(imageId);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: "Image restored successfully",
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: "Failed to restore image",
+      });
+    }
+  } catch (error) {
+    console.error("Restore Image API Error:", error);
+    res.status(500).json({ error: "Failed to restore image" });
+  }
+});
+
+// DELETE /api/admin/images/:id/permanent - Permanently delete image
+router.delete("/images/:id/permanent", async (req, res) => {
+  try {
+    const imageId = req.params.id;
+    
+    if (!imageId) {
+      res.status(400).json({ error: "Image ID is required" });
+      return;
+    }
+
+    const success = await permanentlyDeleteImage(imageId);
+
+    if (success) {
+      res.json({
+        success: true,
+        message: "Image permanently deleted",
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: "Failed to permanently delete image",
+      });
+    }
+  } catch (error) {
+    console.error("Permanent Delete Image API Error:", error);
+    res.status(500).json({ error: "Failed to permanently delete image" });
   }
 });
 
