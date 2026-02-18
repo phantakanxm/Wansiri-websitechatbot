@@ -541,15 +541,19 @@ export async function searchImagesByText(
   console.log(`[ImageSearch] Searching for: "${query}"`);
 
   try {
-    // Step 1: Detect category using AI (if not manually specified)
-    let detectedCategory: string | undefined = options.category;
-    if (!detectedCategory) {
-      const aiCategory = await detectCategoryWithAI(query);
-      detectedCategory = aiCategory || undefined;
+    // Step 1: Detect category and extract keywords in PARALLEL
+    let detectedCategory = options.category;
+    
+    const [aiCategory, keywords] = await Promise.all([
+      // Detect category if not manually specified
+      !detectedCategory ? detectCategoryWithAI(query) : Promise.resolve(null),
+      // Extract keywords for relevance scoring
+      extractKeywords(query)
+    ]);
+    
+    if (!detectedCategory && aiCategory) {
+      detectedCategory = aiCategory;
     }
-
-    // Step 2: Extract keywords for relevance scoring
-    const keywords = await extractKeywords(query);
 
     // Step 3: Build database query with category filter
     let dbQuery = supabase
@@ -635,11 +639,11 @@ export async function searchImagesByResponse(
   console.log(`[ImageSearch] Searching by response: "${responseText.substring(0, 50)}..."`);
 
   try {
-    // Step 1: Detect category using AI
-    const detectedCategory = await detectCategoryWithAI(responseText);
-
-    // Step 2: Extract keywords for relevance scoring
-    const keywords = await extractKeywords(responseText);
+    // Step 1: Detect category and extract keywords in PARALLEL
+    const [detectedCategory, keywords] = await Promise.all([
+      detectCategoryWithAI(responseText),
+      extractKeywords(responseText)
+    ]);
 
     // Step 3: Build database query with category filter
     let dbQuery = supabase
@@ -712,17 +716,69 @@ export async function searchImagesByResponse(
   }
 }
 
-export function isImageQuery(query: string): boolean {
-  const normalizedQuery = query.toLowerCase();
-  const imageIndicators = [
-    "รูป", "ภาพ", "รูปภาพ", "ตัวอย่าง", "before", "after", "ก่อน", "หลัง",
-    "ผลลัพธ์", "เคส", "case", "รีวิว", "ดู", "เห็น", "แสดง", "ประกอบ",
-    "image", "photo", "picture", "example", "result", "outcome", "review",
-    "show", "see", "visual", "diagram", "illustration",
-  ];
-  return imageIndicators.some((indicator) =>
-    normalizedQuery.includes(indicator.toLowerCase())
-  );
+/**
+ * Detect if user is requesting images using AI
+ * Works across all languages (Thai, English, Korean, Chinese, etc.)
+ */
+export async function isImageQuery(query: string): Promise<boolean> {
+  if (!ai) {
+    // Fallback to simple regex if AI not available
+    const normalizedQuery = query.toLowerCase();
+    const imageIndicators = [
+      "รูป", "ภาพ", "รูปภาพ", "ตัวอย่าง", "before", "after", "ก่อน", "หลัง",
+      "ผลลัพธ์", "เคส", "case", "รีวิว", "ดู", "เห็น", "แสดง", "ประกอบ",
+      "image", "photo", "picture", "example", "result", "outcome", "review",
+      "show", "see", "visual", "diagram", "illustration",
+      "사진", "이미지", "보여주", "그림", "사진을",  // Korean
+      "图片", "照片", "图像", "显示", "看", "图片",  // Chinese
+    ];
+    return imageIndicators.some((indicator) =>
+      normalizedQuery.includes(indicator.toLowerCase())
+    );
+  }
+
+  try {
+    console.log(`[ImageQuery] AI analyzing if query requests images: "${query.substring(0, 50)}..."`);
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Analyze this user message and determine if they are requesting to see/view images or photos.
+
+User message: "${query}"
+
+This could be in ANY language (Thai, English, Korean, Chinese, Japanese, etc.).
+
+Respond with ONLY "true" or "false":
+- "true" = User is asking to see images/photos/pictures/diagrams/examples
+- "false" = User is NOT asking for images (asking for text information only)
+
+Examples across languages:
+- "ขอดูรูป" (Thai) → true
+- "show me images" (English) → true
+- "사진 보여주세요" (Korean) → true
+- "给我看图片" (Chinese) → true
+- "画像を見せて" (Japanese) → true
+- "เทคนิคคืออะไร" (Thai - asking what is technique) → false
+- "what is SRS" (English) → false
+- "시술 방법" (Korean - asking procedure method) → false`,
+    });
+
+    const result = response.text?.trim().toLowerCase();
+    const isRequestingImages = result === "true";
+    
+    console.log(`[ImageQuery] AI result: ${isRequestingImages ? 'IMAGE REQUEST' : 'TEXT QUERY'}`);
+    return isRequestingImages;
+  } catch (error) {
+    console.error("[ImageQuery] Error analyzing query:", error);
+    // Fallback on error
+    const normalizedQuery = query.toLowerCase();
+    const imageIndicators = [
+      "รูป", "ภาพ", "image", "photo", "picture", "사진", "이미지", "图片", "照片"
+    ];
+    return imageIndicators.some((indicator) =>
+      normalizedQuery.includes(indicator.toLowerCase())
+    );
+  }
 }
 
 /**

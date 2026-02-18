@@ -25,7 +25,7 @@ class FileSearchCache {
   private maxSize: number;
   private ttl: number; // Time to live in milliseconds
 
-  constructor(maxSize = 500, ttlMinutes = 60) {
+  constructor(maxSize = 500, ttlMinutes = 720) { // 720 minutes = 12 hours
     this.cache = new Map();
     this.maxSize = maxSize;
     this.ttl = ttlMinutes * 60 * 1000;
@@ -276,7 +276,7 @@ class FileSearchCache {
 }
 
 // Global cache instance with longer TTL (60 minutes)
-export const fileSearchCache = new FileSearchCache(500, 60);
+export const fileSearchCache = new FileSearchCache(500, 720); // 720 minutes = 12 hours
 
 /**
  * System instruction for File Search

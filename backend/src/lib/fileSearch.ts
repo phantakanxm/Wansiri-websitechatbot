@@ -443,13 +443,20 @@ export async function generateChatResponseWithHistory(
   let availableImages: { url: string; caption?: string }[] = [];
   let isImageOnlyQuery = false;
 
-  // Only search if user is asking for images
-  if (isImageQuery(userQuestion)) {
+  // Only search if user is asking for images (using AI to detect)
+  const isRequestingImages = await isImageQuery(userQuestion);
+  if (isRequestingImages) {
     const imageStart = Date.now();
 
-    // Enhance query with context from history if needed
-    const enhancedQuery = await getSearchQueryWithContext(userQuestion, history);
+    // Step 1: Get context and analyze intent in PARALLEL
+    const [enhancedQuery, imageIntent] = await Promise.all([
+      getSearchQueryWithContext(userQuestion, history),
+      isImageOnlyIntent(userQuestion)
+    ]);
+    
+    isImageOnlyQuery = imageIntent;
 
+    // Step 2: Search images
     const imageResult = await searchImagesByText(enhancedQuery, { maxResults: 5 });
     availableImages = imageResult.images.map(img => ({
       url: img.storageUrl,
@@ -457,11 +464,8 @@ export async function generateChatResponseWithHistory(
     }));
     console.log(`[Chat] Image search time: ${Date.now() - imageStart}ms, found ${availableImages.length} images`);
     console.log(`[Chat] Searching with query: "${enhancedQuery}" (original: "${userQuestion}")`);
-
-    // Use AI to analyze if this is primarily an image request
-    isImageOnlyQuery = await isImageOnlyIntent(userQuestion);
   } else {
-    console.log('[Chat] No image indicators in user question, skipping image search');
+    console.log('[Chat] AI detected: Not an image request, skipping image search');
   }
 
   // 9. Override response if images found
