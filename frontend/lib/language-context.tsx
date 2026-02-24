@@ -436,9 +436,39 @@ export const translations: Translations = {
   },
   inquiries: {
     th: "ครั้ง",
-    en: "inquiries",
+    en: "Inquiries",
     ko: "건",
     zh: "查询",
+  },
+  images: {
+    th: "รูปภาพ",
+    en: "Images",
+    ko: "이미지",
+    zh: "图片",
+  },
+  analytics: {
+    th: "วิเคราะห์",
+    en: "Analytics",
+    ko: "분석",
+    zh: "分析",
+  },
+  chooseFile: {
+    th: "เลือกไฟล์",
+    en: "Choose File",
+    ko: "파일 선택",
+    zh: "选择文件",
+  },
+  remove: {
+    th: "ลบ",
+    en: "Remove",
+    ko: "제거",
+    zh: "删除",
+  },
+  viewDetails: {
+    th: "ดูรายละเอียด",
+    en: "View Details",
+    ko: "상세 보기",
+    zh: "查看详情",
   },
 };
 

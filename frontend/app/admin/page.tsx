@@ -169,7 +169,7 @@ export default function AdminDashboard() {
             {t("dashboard")}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Welcome back! Here's what's happening today.
+            Welcome Back! Here's What's Happening Today.
           </p>
         </div>
         <Button 

@@ -15,6 +15,12 @@ import {
   restoreImage,
   permanentlyDeleteImage,
 } from "../lib/imageSearch";
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "../lib/categories";
 
 const router = Router();
 
@@ -341,6 +347,118 @@ router.delete("/images/:id/permanent", async (req, res) => {
   } catch (error) {
     console.error("Permanent Delete Image API Error:", error);
     res.status(500).json({ error: "Failed to permanently delete image" });
+  }
+});
+
+// ============================================
+// CATEGORIES ENDPOINTS
+// ============================================
+
+// GET /api/admin/categories - List all categories
+router.get("/categories", async (req, res) => {
+  try {
+    const categories = await getCategories();
+    res.json({
+      success: true,
+      count: categories.length,
+      categories,
+    });
+  } catch (error) {
+    console.error("List Categories API Error:", error);
+    res.status(500).json({ error: "Failed to list categories" });
+  }
+});
+
+// POST /api/admin/categories - Create new category
+router.post("/categories", async (req, res) => {
+  try {
+    const { value, label, icon } = req.body;
+
+    if (!value || !label) {
+      res.status(400).json({ error: "Value and label are required" });
+      return;
+    }
+
+    const result = await createCategory(value, label, icon);
+
+    if (result.success) {
+      res.status(201).json({
+        success: true,
+        category: result.category,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Create Category API Error:", error);
+    res.status(500).json({ error: "Failed to create category" });
+  }
+});
+
+// PUT /api/admin/categories/:id - Update category
+router.put("/categories/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+    const { label, icon, sort_order } = req.body;
+
+    if (!categoryId) {
+      res.status(400).json({ error: "Category ID is required" });
+      return;
+    }
+
+    const updates: any = {};
+    if (label !== undefined) updates.label = label;
+    if (icon !== undefined) updates.icon = icon;
+    if (sort_order !== undefined) updates.sort_order = sort_order;
+
+    const result = await updateCategory(categoryId, updates);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        category: result.category,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Update Category API Error:", error);
+    res.status(500).json({ error: "Failed to update category" });
+  }
+});
+
+// DELETE /api/admin/categories/:id - Delete category
+router.delete("/categories/:id", async (req, res) => {
+  try {
+    const categoryId = req.params.id;
+
+    if (!categoryId) {
+      res.status(400).json({ error: "Category ID is required" });
+      return;
+    }
+
+    const result = await deleteCategory(categoryId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Category deleted successfully",
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Delete Category API Error:", error);
+    res.status(500).json({ error: "Failed to delete category" });
   }
 });
 

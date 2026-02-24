@@ -150,7 +150,7 @@ export default function LeadsPage() {
             {t("leads")}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Manage and track patient inquiries
+            Manage and Track Patient Inquiries
           </p>
         </div>
         <Badge 
@@ -306,8 +306,8 @@ export default function LeadsPage() {
           <div className="h-16 w-16 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
             <Stethoscope className="h-8 w-8 text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">No leads found</h3>
-          <p className="text-gray-500 mt-1">Try adjusting your filters</p>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">No Leads Found</h3>
+          <p className="text-gray-500 mt-1">Try Adjusting Your Filters</p>
         </div>
       )}
     </div>

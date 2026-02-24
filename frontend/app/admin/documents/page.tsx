@@ -35,6 +35,7 @@ import {
   FilePlus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CuteUploadLoader } from "@/components/cute-upload-loader";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -85,24 +86,32 @@ export default function DocumentsPage() {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file type
-      const allowedTypes = [".pdf", ".txt", ".md"];
-      const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-      if (!allowedTypes.includes(ext)) {
-        showNotification("error", t("invalidFileType"));
-        return;
-      }
-      // Validate file size (10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        showNotification("error", t("fileTooLarge"));
-        return;
-      }
-      setSelectedFile(file);
+  // Handle file validation and selection
+  const handleFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    
+    // Documents only accept single file
+    const file = files[0];
+    
+    // Validate file type
+    const allowedTypes = [".pdf", ".txt", ".md"];
+    const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+    if (!allowedTypes.includes(ext)) {
+      showNotification("error", t("invalidFileType"));
+      return;
     }
+    // Validate file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification("error", t("fileTooLarge"));
+      return;
+    }
+    setSelectedFile(file);
+  };
+
+  // Handle file selection from input
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    handleFiles(files);
   };
 
   // Handle upload
@@ -213,7 +222,7 @@ export default function DocumentsPage() {
             {t("documents")}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Manage knowledge base documents for AI responses
+            Manage Knowledge Base Documents for AI Responses
           </p>
         </div>
         <Button
@@ -226,6 +235,12 @@ export default function DocumentsPage() {
           {t("refresh")}
         </Button>
       </div>
+
+      {/* Cute Upload Loader Overlay */}
+      <CuteUploadLoader 
+        isOpen={isUploading} 
+        fileCount={selectedFile ? 1 : 0}
+      />
 
       {/* Notification */}
       {notification && (
@@ -270,55 +285,139 @@ export default function DocumentsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="relative flex-1">
-                <Input
+            {/* File Upload Dropzone */}
+            <div className="space-y-4">
+              <div
+                className={cn(
+                  "relative group cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300",
+                  "bg-gradient-to-br from-gray-50/50 to-gray-100/50 dark:from-slate-800/50 dark:to-slate-900/50",
+                  "border-[#16bec9]/30 dark:border-[#16bec9]/20",
+                  "hover:border-[#16bec9]/60 hover:from-[#16bec9]/5 hover:to-[#14a8b2]/5",
+                  "dark:hover:border-[#16bec9]/40 dark:hover:from-[#16bec9]/10 dark:hover:to-[#14a8b2]/10",
+                  selectedFile && "border-[#16bec9] bg-[#16bec9]/5 dark:bg-[#16bec9]/10"
+                )}
+                onClick={() => document.getElementById("doc-file-upload")?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const files = Array.from(e.dataTransfer.files);
+                  handleFiles(files);
+                }}
+              >
+                <input
+                  id="doc-file-upload"
                   type="file"
                   accept=".pdf,.txt,.md"
                   onChange={handleFileChange}
                   disabled={isUploading}
-                  className="h-12 border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9] cursor-pointer"
+                  className="hidden"
                 />
-              </div>
-              <Button
-                onClick={handleUpload}
-                disabled={!selectedFile || isUploading}
-                className="h-12 px-6 bg-gradient-to-r from-[#16bec9] to-[#14a8b2] hover:from-[#14a8b2] hover:to-[#129aa3] text-white shadow-lg shadow-[#16bec9]/25"
-              >
-                {isUploading ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    {t("uploading")}...
-                  </>
-                ) : (
-                  <>
+                <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
+                  <div
+                    className={cn(
+                      "h-20 w-20 rounded-2xl flex items-center justify-center mb-4 transition-all duration-300",
+                      "bg-gradient-to-br from-[#16bec9]/10 to-[#14a8b2]/10",
+                      "group-hover:from-[#16bec9]/20 group-hover:to-[#14a8b2]/20",
+                      "group-hover:scale-110 group-hover:rotate-3"
+                    )}
+                  >
+                    <FilePlus className="h-10 w-10 text-[#16bec9] group-hover:text-[#14a8b2] transition-colors" />
+                  </div>
+                  
+                  <p className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                    {selectedFile 
+                      ? "เลือกไฟล์แล้ว 1 ไฟล์"
+                      : "ลากไฟล์มาวางที่นี่ หรือคลิกเลือก"
+                    }
+                  </p>
+                  
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    {t("supportedFormats")}: PDF, TXT, MD | {t("maxSize")}: 10MB
+                  </p>
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isUploading}
+                    className="border-[#16bec9]/30 text-[#16bec9] hover:bg-[#16bec9]/10 hover:border-[#16bec9]/50"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      document.getElementById("doc-file-upload")?.click();
+                    }}
+                  >
                     <Upload className="h-4 w-4 mr-2" />
-                    {t("upload")}
-                  </>
-                )}
-              </Button>
+                    {t("chooseFile")}
+                  </Button>
+                </div>
+                
+                {/* Corner decorations */}
+                <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-[#16bec9]/20 rounded-tl-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-[#16bec9]/20 rounded-tr-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-[#16bec9]/20 rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-[#16bec9]/20 rounded-br-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+
+              {/* Upload Button */}
+              {selectedFile && (
+                <Button
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="w-full h-12 bg-gradient-to-r from-[#16bec9] to-[#14a8b2] hover:from-[#14a8b2] hover:to-[#129aa3] text-white shadow-lg shadow-[#16bec9]/25"
+                >
+                  {isUploading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      {t("uploading")}...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {t("upload")}
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
+            {/* Selected File Preview */}
             {selectedFile && (
-              <div className="flex items-center gap-3 p-4 bg-[#16bec9]/10 dark:bg-[#16bec9]/10 border border-[#16bec9]/20 dark:border-[#16bec9]/30 rounded-xl">
-                {getFileIcon(selectedFile.name)}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 dark:text-white truncate">{selectedFile.name}</p>
-                  <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
+              <div className="rounded-xl border border-[#16bec9]/20 dark:border-[#16bec9]/30 bg-gradient-to-br from-[#16bec9]/5 to-transparent p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    ไฟล์ที่เลือก
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFile(null);
+                      // Reset file input so same file can be selected again
+                      const fileInput = document.getElementById("doc-file-upload") as HTMLInputElement;
+                      if (fileInput) fileInput.value = "";
+                    }}
+                    className="h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" />
+                    {t("remove")}
+                  </Button>
                 </div>
-                <button
-                  onClick={() => setSelectedFile(null)}
-                  className="p-2 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-500 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                
+                <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  {getFileIcon(selectedFile.name)}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={selectedFile.name}>
+                      {selectedFile.name}
+                    </p>
+                    <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                </div>
               </div>
             )}
-
-            <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-[#16bec9]" />
-              {t("supportedFormats")}: PDF, TXT, MD | {t("maxSize")}: 10MB
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -355,7 +454,7 @@ export default function DocumentsPage() {
                 <FileText className="h-8 w-8 text-gray-400" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">{t("noDocuments")}</h3>
-              <p className="text-gray-500">Upload your first document to get started</p>
+              <p className="text-gray-500">Upload Your First Document to Get Started</p>
             </div>
           ) : (
             <Table>

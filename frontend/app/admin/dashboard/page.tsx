@@ -438,8 +438,8 @@ export default function DashboardPage() {
                   <div className="h-16 w-16 rounded-full bg-emerald-100 dark:bg-emerald-950/50 flex items-center justify-center mb-4">
                     <CheckCircle className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
                   </div>
-                  <p className="text-lg font-medium">No errors found</p>
-                  <p className="text-sm">Your system is running smoothly!</p>
+                  <p className="text-lg font-medium">No Errors Found</p>
+                  <p className="text-sm">Your System is Running Smoothly!</p>
                 </div>
               ) : (
                 <div className="space-y-3">

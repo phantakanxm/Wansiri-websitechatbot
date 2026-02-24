@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -41,8 +42,11 @@ import {
   RotateCcw,
   AlertTriangle,
   Trash,
+  Plus,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { CuteUploadLoader } from "@/components/cute-upload-loader";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -54,15 +58,15 @@ interface UploadedImage {
   category: string;
 }
 
-// Categories for image classification
-const CATEGORIES = [
-  { value: "srs-tec", label: "🩺 เทคนิคการผ่าตัด (Technique)" },
-  { value: "srs-review", label: "⭐ รีวิว/ผลลัพธ์ (Review)" },
-  { value: "srs-doctor", label: "👨‍⚕️ ข้อมูลแพทย์ (Doctor)" },
-  { value: "srs-package", label: "💰 แพ็คเกจ/ราคา (Package)" },
-  { value: "srs-facility", label: "🏥 สถานที่/ห้องผ่าตัด (Facility)" },
-  { value: "general", label: "📁 ทั่วไป (General)" },
-];
+interface Category {
+  id: string;
+  value: string;
+  label: string;
+  icon: string;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export default function ImagesPage() {
   const [images, setImages] = useState<UploadedImage[]>([]);
@@ -81,6 +85,15 @@ export default function ImagesPage() {
     type: "success" | "error";
     message: string;
   } | null>(null);
+
+  // Categories state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  const [newCategoryValue, setNewCategoryValue] = useState("");
+  const [newCategoryLabel, setNewCategoryLabel] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState("📁");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   // Fetch active images
   const fetchImages = useCallback(async () => {
@@ -114,6 +127,87 @@ export default function ImagesPage() {
     }
   }, []);
 
+  // Fetch categories
+  const fetchCategories = useCallback(async () => {
+    setIsLoadingCategories(true);
+    try {
+      const response = await fetch(`${API_URL}/api/admin/categories`);
+      if (!response.ok) throw new Error("Failed to fetch categories");
+      const data = await response.json();
+      setCategories(data.categories || []);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      // Fallback to default categories if API fails
+      setCategories([
+        { id: "1", value: "srs-tec", label: "เทคนิคการผ่าตัด (Technique)", icon: "🩺", sort_order: 1, created_at: "", updated_at: "" },
+        { id: "2", value: "srs-review", label: "รีวิว/ผลลัพธ์ (Review)", icon: "⭐", sort_order: 2, created_at: "", updated_at: "" },
+        { id: "3", value: "srs-doctor", label: "ข้อมูลแพทย์ (Doctor)", icon: "👨‍⚕️", sort_order: 3, created_at: "", updated_at: "" },
+        { id: "4", value: "srs-package", label: "แพ็คเกจ/ราคา (Package)", icon: "💰", sort_order: 4, created_at: "", updated_at: "" },
+        { id: "5", value: "srs-facility", label: "สถานที่/ห้องผ่าตัด (Facility)", icon: "🏥", sort_order: 5, created_at: "", updated_at: "" },
+        { id: "6", value: "general", label: "ทั่วไป (General)", icon: "📁", sort_order: 6, created_at: "", updated_at: "" },
+      ]);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  }, []);
+
+  // Create new category
+  const handleCreateCategory = async () => {
+    if (!newCategoryValue.trim() || !newCategoryLabel.trim()) {
+      showNotification("error", "กรุณากรอกชื่อและ Label ของหมวดหมู่");
+      return;
+    }
+
+    setIsCreatingCategory(true);
+    try {
+      const response = await fetch(`${API_URL}/api/admin/categories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          value: newCategoryValue,
+          label: newCategoryLabel,
+          icon: newCategoryIcon,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showNotification("success", "สร้างหมวดหมู่สำเร็จ");
+        setCategoryDialogOpen(false);
+        setNewCategoryValue("");
+        setNewCategoryLabel("");
+        setNewCategoryIcon("📁");
+        await fetchCategories();
+      } else {
+        showNotification("error", data.error || "สร้างหมวดหมู่ไม่สำเร็จ");
+      }
+    } catch (error) {
+      console.error("Error creating category:", error);
+      showNotification("error", "สร้างหมวดหมู่ไม่สำเร็จ");
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  // Get category display label
+  const getCategoryLabel = (value: string): string => {
+    const cat = categories.find(c => c.value === value);
+    return cat ? `${cat.icon} ${cat.label} (${cat.value})` : value;
+  };
+
+  // Get category badge display
+  const getCategoryBadge = (value: string): { icon: string; label: string; value: string } => {
+    const cat = categories.find(c => c.value === value);
+    return cat 
+      ? { icon: cat.icon, label: cat.label, value: cat.value }
+      : { icon: "📁", label: value, value };
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
   useEffect(() => {
     if (activeTab === "active") {
       fetchImages();
@@ -128,29 +222,34 @@ export default function ImagesPage() {
     setTimeout(() => setNotification(null), 5000);
   };
 
-  // Handle file selection
+  // Handle file validation and selection
+  const handleFiles = (files: File[]) => {
+    if (files.length === 0) return;
+
+    const allowedTypes = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    const invalidFiles = files.filter(file => {
+      const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
+      return !allowedTypes.includes(ext);
+    });
+
+    if (invalidFiles.length > 0) {
+      showNotification("error", "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น");
+      return;
+    }
+
+    const oversizedFiles = files.filter(file => file.size > 10 * 1024 * 1024);
+    if (oversizedFiles.length > 0) {
+      showNotification("error", "ไฟล์ต้องมีขนาดไม่เกิน 10MB ต่อรูป");
+      return;
+    }
+
+    setSelectedFiles(files);
+  };
+
+  // Handle file selection from input
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      const allowedTypes = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-      const invalidFiles = files.filter(file => {
-        const ext = file.name.substring(file.name.lastIndexOf(".")).toLowerCase();
-        return !allowedTypes.includes(ext);
-      });
-      
-      if (invalidFiles.length > 0) {
-        showNotification("error", "รองรับเฉพาะไฟล์ JPG, PNG, GIF, WEBP เท่านั้น");
-        return;
-      }
-      
-      const oversizedFiles = files.filter(file => file.size > 10 * 1024 * 1024);
-      if (oversizedFiles.length > 0) {
-        showNotification("error", "ไฟล์ต้องมีขนาดไม่เกิน 10MB ต่อรูป");
-        return;
-      }
-      
-      setSelectedFiles(files);
-    }
+    handleFiles(files);
   };
 
   // Handle upload
@@ -285,6 +384,12 @@ export default function ImagesPage() {
         </Button>
       </div>
 
+      {/* Cute Upload Loader Overlay */}
+      <CuteUploadLoader 
+        isOpen={isUploading} 
+        fileCount={selectedFiles.length}
+      />
+
       {/* Notification */}
       {notification && (
         <div
@@ -365,17 +470,31 @@ export default function ImagesPage() {
             <div className="space-y-4">
               {/* Category Select */}
               <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  หมวดหมู่ (Category)
-                </label>
-                <Select value={category} onValueChange={setCategory}>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    หมวดหมู่ (Category)
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCategoryDialogOpen(true)}
+                    className="h-7 px-2 text-[#16bec9] hover:text-[#14a8b2] hover:bg-[#16bec9]/10"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    เพิ่มหมวดหมู่
+                  </Button>
+                </div>
+                <Select value={category} onValueChange={setCategory} disabled={isLoadingCategories}>
                   <SelectTrigger className="h-10 border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]">
                     <SelectValue placeholder="เลือกหมวดหมู่" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((cat) => (
+                    {categories.map((cat) => (
                       <SelectItem key={cat.value} value={cat.value}>
-                        {cat.label}
+                        <span className="flex items-center gap-2">
+                          <span>{cat.icon}</span>
+                          <span>{cat.label} ({cat.value})</span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -385,64 +504,155 @@ export default function ImagesPage() {
                 </p>
               </div>
 
-              {/* File Input */}
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-                <div className="relative flex-1">
-                  <Input
+              {/* File Upload Dropzone */}
+              <div className="space-y-4">
+                <div
+                  className={cn(
+                    "relative group cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300",
+                    "bg-gradient-to-br from-gray-50/50 to-gray-100/50 dark:from-slate-800/50 dark:to-slate-900/50",
+                    "border-[#16bec9]/30 dark:border-[#16bec9]/20",
+                    "hover:border-[#16bec9]/60 hover:from-[#16bec9]/5 hover:to-[#14a8b2]/5",
+                    "dark:hover:border-[#16bec9]/40 dark:hover:from-[#16bec9]/10 dark:hover:to-[#14a8b2]/10",
+                    selectedFiles.length > 0 && "border-[#16bec9] bg-[#16bec9]/5 dark:bg-[#16bec9]/10"
+                  )}
+                  onClick={() => document.getElementById("file-upload")?.click()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const files = Array.from(e.dataTransfer.files);
+                    handleFiles(files);
+                  }}
+                >
+                  <input
+                    id="file-upload"
                     type="file"
                     accept=".jpg,.jpeg,.png,.gif,.webp"
                     onChange={handleFileChange}
                     disabled={isUploading}
                     multiple
-                    className="h-12 border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9] cursor-pointer"
+                    className="hidden"
                   />
-                </div>
-                <Button
-                  onClick={handleUpload}
-                  disabled={selectedFiles.length === 0 || isUploading}
-                  className="h-12 px-6 bg-gradient-to-r from-[#16bec9] to-[#14a8b2] hover:from-[#14a8b2] hover:to-[#129aa3] text-white shadow-lg shadow-[#16bec9]/25"
-                >
-                  {isUploading ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      กำลังอัปโหลด...
-                    </>
-                  ) : (
-                    <>
+                  <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
+                    <div
+                      className={cn(
+                        "h-20 w-20 rounded-2xl flex items-center justify-center mb-4 transition-all duration-300",
+                        "bg-gradient-to-br from-[#16bec9]/10 to-[#14a8b2]/10",
+                        "group-hover:from-[#16bec9]/20 group-hover:to-[#14a8b2]/20",
+                        "group-hover:scale-110 group-hover:rotate-3"
+                      )}
+                    >
+                      <ImageIcon className="h-10 w-10 text-[#16bec9] group-hover:text-[#14a8b2] transition-colors" />
+                    </div>
+                    
+                    <p className="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">
+                      {selectedFiles.length > 0 
+                        ? `เลือกแล้ว ${selectedFiles.length} ไฟล์`
+                        : "ลากไฟล์มาวางที่นี่ หรือคลิกเลือก"
+                      }
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      รองรับ: JPG, PNG, GIF, WEBP | ขนาดสูงสุด 10MB ต่อรูป
+                    </p>
+                    
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isUploading}
+                      className="border-[#16bec9]/30 text-[#16bec9] hover:bg-[#16bec9]/10 hover:border-[#16bec9]/50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        document.getElementById("file-upload")?.click();
+                      }}
+                    >
                       <Upload className="h-4 w-4 mr-2" />
-                      อัปโหลด {selectedFiles.length > 0 && `(${selectedFiles.length})`}
-                    </>
-                  )}
-                </Button>
+                      เลือกไฟล์
+                    </Button>
+                  </div>
+                  
+                  {/* Corner decorations */}
+                  <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-[#16bec9]/20 rounded-tl-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-[#16bec9]/20 rounded-tr-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-[#16bec9]/20 rounded-bl-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-[#16bec9]/20 rounded-br-lg opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+
+                {/* Upload Button */}
+                {selectedFiles.length > 0 && (
+                  <Button
+                    onClick={handleUpload}
+                    disabled={isUploading}
+                    className="w-full h-12 bg-gradient-to-r from-[#16bec9] to-[#14a8b2] hover:from-[#14a8b2] hover:to-[#129aa3] text-white shadow-lg shadow-[#16bec9]/25"
+                  >
+                    {isUploading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        กำลังอัปโหลด {selectedFiles.length} รูป...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        อัปโหลด {selectedFiles.length} รูป
+                      </>
+                    )}
+                  </Button>
+                )}
               </div>
 
-              {/* Selected Files */}
+              {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
-                <div className="space-y-2">
-                  {selectedFiles.map((file, idx) => (
-                    <div key={idx} className="flex items-center gap-3 p-3 bg-[#16bec9]/10 dark:bg-[#16bec9]/10 border border-[#16bec9]/20 dark:border-[#16bec9]/30 rounded-xl">
-                      <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                        <ImageIcon className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
-                        <p className="text-sm text-gray-500">{formatFileSize(file.size)}</p>
-                      </div>
-                      <button
-                        onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
-                        className="p-2 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-500 transition-colors"
+                <div className="rounded-xl border border-[#16bec9]/20 dark:border-[#16bec9]/30 bg-gradient-to-br from-[#16bec9]/5 to-transparent p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      ไฟล์ที่เลือก ({selectedFiles.length})
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFiles([]);
+                        // Reset file input so same files can be selected again
+                        const fileInput = document.getElementById("file-upload") as HTMLInputElement;
+                        if (fileInput) fileInput.value = "";
+                      }}
+                      className="h-7 px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      ล้างทั้งหมด
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedFiles.map((file, idx) => (
+                      <div 
+                        key={idx} 
+                        className="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-[#16bec9]/30 transition-colors"
                       >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-[#16bec9]/20 to-[#14a8b2]/20 flex items-center justify-center flex-shrink-0">
+                          <ImageIcon className="h-5 w-5 text-[#16bec9]" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={file.name}>
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                        </div>
+                        
+                        <button
+                          onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))}
+                          className="p-1.5 rounded-md hover:bg-rose-100 dark:hover:bg-rose-900 text-rose-400 hover:text-rose-500 transition-colors"
+                          title="ลบไฟล์นี้"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>                
                 </div>
               )}
-
-              <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-[#16bec9]" />
-                รองรับ: JPG, PNG, GIF, WEBP | ขนาดสูงสุด: 10MB ต่อรูป | สูงสุด 10 รูปต่อครั้ง
-              </p>
             </div>
           </CardContent>
         </Card>
@@ -462,6 +672,7 @@ export default function ImagesPage() {
 
       {/* Images List */}
       <Card className="border-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-lg overflow-hidden">
+        <div className="h-1 bg-gradient-to-r from-[#16bec9] to-[#14a8b2]" />
         <CardHeader className="border-b border-gray-100 dark:border-gray-800">
           <CardTitle className="flex items-center justify-between text-gray-900 dark:text-white">
             <div className="flex items-center gap-2">
@@ -562,9 +773,16 @@ export default function ImagesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {img.category}
-                      </Badge>
+                      {(() => {
+                        const cat = getCategoryBadge(img.category);
+                        return (
+                          <Badge variant="outline" className="text-xs flex items-center gap-1.5 py-1.5 px-2">
+                            <span>{cat.icon}</span>
+                            <span className="text-gray-700 dark:text-gray-300">{cat.label}</span>
+                            <span className="text-gray-400 text-[10px]">({cat.value})</span>
+                          </Badge>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="text-right">
                       {activeTab === "active" ? (
@@ -673,6 +891,106 @@ export default function ImagesPage() {
             >
               <Trash2 className="h-4 w-4 mr-2" />
               ลบถาวร
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Category Dialog */}
+      <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
+        <DialogContent className="border-0 bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <div className="h-8 w-8 rounded-full bg-[#16bec9]/10 dark:bg-[#16bec9]/20 flex items-center justify-center">
+                <Tag className="h-4 w-4 text-[#16bec9]" />
+              </div>
+              เพิ่มหมวดหมู่ใหม่
+            </DialogTitle>
+            <DialogDescription className="text-gray-500">
+              สร้างหมวดหมู่สำหรับจัดกลุ่มรูปภาพ
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="cat-value" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                รหัสหมวดหมู่ (Value) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="cat-value"
+                placeholder="เช่น srs-promotion, before-after"
+                value={newCategoryValue}
+                onChange={(e) => setNewCategoryValue(e.target.value)}
+                className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]"
+              />
+              <p className="text-xs text-gray-500">
+                ใช้เฉพาะ a-z, 0-9, และขีดกลาง ระบบจะแปลงเป็นตัวพิมพ์เล็กอัตโนมัติ
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cat-label" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                ชื่อที่แสดง (Label) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="cat-label"
+                placeholder="เช่น โปรโมชั่น, ก่อน-หลัง"
+                value={newCategoryLabel}
+                onChange={(e) => setNewCategoryLabel(e.target.value)}
+                className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cat-icon" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                ไอคอน (Emoji)
+              </Label>
+              <Select value={newCategoryIcon} onValueChange={setNewCategoryIcon}>
+                <SelectTrigger className="border-[#16bec9]/20 dark:border-slate-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="📁">📁 แฟ้ม (Folder)</SelectItem>
+                  <SelectItem value="🩺">🩺 แพทย์ (Medical)</SelectItem>
+                  <SelectItem value="⭐">⭐ ดาว (Star)</SelectItem>
+                  <SelectItem value="👨‍⚕️">👨‍⚕️ หมอ (Doctor)</SelectItem>
+                  <SelectItem value="💰">💰 เงิน (Money)</SelectItem>
+                  <SelectItem value="🏥">🏥 โรงพยาบาล (Hospital)</SelectItem>
+                  <SelectItem value="🛏️">🛏️ ห้องพัก (Room)</SelectItem>
+                  <SelectItem value="🎁">🎁 ของขวัญ (Gift)</SelectItem>
+                  <SelectItem value="📸">📸 กล้อง (Camera)</SelectItem>
+                  <SelectItem value="✨">✨ แวววับ (Sparkles)</SelectItem>
+                  <SelectItem value="🔥">🔥 ไฟ (Fire)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCategoryDialogOpen(false);
+                setNewCategoryValue("");
+                setNewCategoryLabel("");
+                setNewCategoryIcon("📁");
+              }}
+              className="border-gray-200 dark:border-slate-700"
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleCreateCategory}
+              disabled={isCreatingCategory || !newCategoryValue.trim() || !newCategoryLabel.trim()}
+              className="bg-gradient-to-r from-[#16bec9] to-[#14a8b2] text-white"
+            >
+              {isCreatingCategory ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  กำลังสร้าง...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  สร้างหมวดหมู่
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

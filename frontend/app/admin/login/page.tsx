@@ -119,18 +119,12 @@ function LoginContent() {
                 )}
               </Button>
             </form>
-
-            <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
-              <p className="text-center text-sm text-gray-500">
-                <span className="font-medium">Demo:</span> admin / wansiri2024
-              </p>
-            </div>
           </CardContent>
         </Card>
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-8">
-          © 2024 Wansiri Hospital. All rights reserved.
+          © 2024 Wansiri Hospital. All Rights Reserved.
         </p>
       </div>
     </div>
