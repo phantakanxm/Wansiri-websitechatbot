@@ -143,8 +143,9 @@ export default function ImagesPage() {
         { id: "2", value: "srs-review", label: "รีวิว/ผลลัพธ์ (Review)", icon: "⭐", sort_order: 2, created_at: "", updated_at: "" },
         { id: "3", value: "srs-doctor", label: "ข้อมูลแพทย์ (Doctor)", icon: "👨‍⚕️", sort_order: 3, created_at: "", updated_at: "" },
         { id: "4", value: "srs-package", label: "แพ็คเกจ/ราคา (Package)", icon: "💰", sort_order: 4, created_at: "", updated_at: "" },
-        { id: "5", value: "srs-facility", label: "สถานที่/ห้องผ่าตัด (Facility)", icon: "🏥", sort_order: 5, created_at: "", updated_at: "" },
-        { id: "6", value: "general", label: "ทั่วไป (General)", icon: "📁", sort_order: 6, created_at: "", updated_at: "" },
+        { id: "5", value: "srs-room", label: "ห้องพัก/ห้องรับรอง (Room)", icon: "🛏️", sort_order: 5, created_at: "", updated_at: "" },
+        { id: "6", value: "srs-operatingroom", label: "ห้องผ่าตัด (Operating Room)", icon: "🏥", sort_order: 6, created_at: "", updated_at: "" },
+        { id: "7", value: "general", label: "ทั่วไป (General)", icon: "📁", sort_order: 7, created_at: "", updated_at: "" },
       ]);
     } finally {
       setIsLoadingCategories(false);

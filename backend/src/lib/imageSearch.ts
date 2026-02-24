@@ -423,7 +423,8 @@ Available categories:
 - srs-review: Reviews, results, before/after photos, patient cases, outcomes (e.g., "รีวิว", "ผลลัพธ์", "before/after", "เคส")
 - srs-doctor: Doctor information, surgeon profiles, medical staff (e.g., "หมอ", "แพทย์", "doctor", "surgeon")
 - srs-package: Pricing, packages, costs, fees, promotions (e.g., "ราคา", "แพ็คเกจ", "price", "cost")
-- srs-facility: Hospital, facility, room, equipment, location (e.g., "โรงพยาบาล", "ห้องผ่าตัด", "hospital", "facility")
+- srs-room: Patient rooms, hospital rooms, recovery rooms, accommodation (e.g., "ห้องพัก", "ห้องรับรอง", "room", "ward")
+- srs-operatingroom: Operating rooms, surgery rooms, medical equipment, OR (e.g., "ห้องผ่าตัด", "ห้องซีสาร์", "operating room", "OR", "surgery room")
 - general: General information, doesn't clearly fit above categories
 
 Respond with ONLY the category code (e.g., "srs-tec") or "general".
@@ -434,7 +435,7 @@ User question: "${query.substring(0, 500)}"`,
 
     const category = response.text?.trim().toLowerCase();
     
-    const validCategories = ["srs-tec", "srs-review", "srs-doctor", "srs-package", "srs-facility"];
+    const validCategories = ["srs-tec", "srs-review", "srs-doctor", "srs-package", "srs-room", "srs-operatingroom"];
     
     if (category && validCategories.includes(category)) {
       console.log(`[ImageSearch] AI detected category: ${category}`);
