@@ -35,6 +35,12 @@ export interface ChatMessageImage {
   caption?: string;
 }
 
+export interface ChatMessageVideo {
+  url: string;           // YouTube URL (https://youtube.com/watch?v=... หรือ https://youtu.be/...)
+  title?: string;        // ชื่อวิดีโอ
+  thumbnail?: string;    // URL รูป thumbnail (optional)
+}
+
 export interface ChatMessage {
   /** Unique message ID */
   id: string;
@@ -54,6 +60,10 @@ export interface ChatMessage {
   availableImages?: ChatMessageImage[];
   /** Number of available images */
   imageCount?: number;
+  /** Attached YouTube videos */
+  videos?: ChatMessageVideo[];
+  /** Whether videos are currently shown/expanded */
+  showVideos?: boolean;
 }
 
 // ========================================

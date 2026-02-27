@@ -3,6 +3,7 @@ import { detectLanguage, translateText, SupportedLanguage } from "./language";
 import { withRetry, RETRY_CONFIGS } from "./retry";
 import { performFileSearchWithCache, getFileSearchCacheStats } from "./fileSearchCache";
 import { searchImagesByText, isImageQuery } from "./imageSearch";
+import { enhanceResponseWithVideos } from "./videos";
 
 interface ChatMessage {
   role: "user" | "model";
@@ -19,6 +20,7 @@ interface ChatResponseWithImages {
   fromCache?: boolean;
   availableImages?: { url: string; caption?: string }[];
   imageCount?: number;
+  videos?: { url: string; title?: string }[];
 }
 
 /**
@@ -515,6 +517,14 @@ export async function generateChatResponseWithHistory(
   console.log("[Chat] DEBUG - Available images:", availableImages.length);
   console.log("========================================\n");
 
+  // 9. Search for relevant videos (e.g., hospital recommendations)
+  const videoResult = await enhanceResponseWithVideos(finalResponse, userQuestion, 2);
+  const videos = videoResult.videos;
+  
+  if (videos.length > 0) {
+    console.log(`[Chat] Found ${videos.length} relevant video(s)`);
+  }
+
   return {
     response: finalResponse,
     detectedLang: inputLang,
@@ -524,6 +534,7 @@ export async function generateChatResponseWithHistory(
     fromCache: searchResult.fromCache,
     availableImages: availableImages.length > 0 ? availableImages : undefined,
     imageCount: availableImages.length,
+    videos: videos.length > 0 ? videos : undefined,
   };
 }
 

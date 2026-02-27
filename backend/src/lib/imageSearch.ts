@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
 import sharp from "sharp";
+import { getSubcategories, detectSubcategoryWithAI } from "./subcategories";
 
 // Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || "";
@@ -25,6 +26,8 @@ const STORAGE_BUCKET = "pdf-images";
 export interface SearchableImage {
   id: string;
   category: string;
+  subcategory?: string;
+  subcategory_id?: string;
   storageUrl: string;
   caption?: string;
   extractedText?: string;
@@ -148,9 +151,10 @@ Respond in JSON format ONLY:
 export async function uploadImageDirect(
   filePath: string,
   originalFileName: string,
-  category: string = "general"
+  category: string = "general",
+  subcategory?: string
 ): Promise<UploadImageResult> {
-  console.log(`[ImageUpload] Starting upload: ${originalFileName} [${category}]`);
+  console.log(`[ImageUpload] Starting upload: ${originalFileName} [${category}${subcategory ? '/' + subcategory : ''}]`);
 
   try {
     await ensureBucketExists();
@@ -209,6 +213,7 @@ export async function uploadImageDirect(
         storage_url: storageUrl,
         filename: storageFileName,
         category: category,
+        subcategory: subcategory || null,
         caption: caption,
         extracted_text: extractedText,
         tags: tags,
@@ -233,6 +238,7 @@ export async function uploadImageDirect(
       image: {
         id: insertedData.id,
         category: insertedData.category,
+        subcategory: insertedData.subcategory,
         storageUrl: insertedData.storage_url,
         caption: insertedData.caption,
         extractedText: insertedData.extracted_text,
@@ -251,7 +257,7 @@ export async function uploadImageDirect(
 /**
  * List all uploaded images
  */
-export async function listUploadedImages(category?: string): Promise<SearchableImage[]> {
+export async function listUploadedImages(category?: string, subcategory?: string): Promise<SearchableImage[]> {
   try {
     let query = supabase
       .from("images")
@@ -261,6 +267,10 @@ export async function listUploadedImages(category?: string): Promise<SearchableI
 
     if (category) {
       query = query.eq("category", category);
+    }
+
+    if (subcategory) {
+      query = query.eq("subcategory", subcategory);
     }
 
     const { data, error } = await query;
@@ -273,6 +283,7 @@ export async function listUploadedImages(category?: string): Promise<SearchableI
     return (data || []).map((item: any) => ({
       id: item.id,
       category: item.category,
+      subcategory: item.subcategory,
       storageUrl: item.storage_url,
       caption: item.caption,
       extractedText: item.extracted_text,
@@ -325,6 +336,7 @@ export async function listTrashedImages(): Promise<SearchableImage[]> {
     return (data || []).map((item: any) => ({
       id: item.id,
       category: item.category,
+      subcategory: item.subcategory,
       storageUrl: item.storage_url,
       caption: item.caption,
       extractedText: item.extracted_text,
@@ -537,26 +549,35 @@ export async function searchImagesByText(
   options: {
     maxResults?: number;
     category?: string;
+    subcategory?: string;
   } = {}
 ): Promise<ImageSearchResult> {
   console.log(`[ImageSearch] Searching for: "${query}"`);
 
   try {
-    // Step 1: Detect category and extract keywords in PARALLEL
-    let detectedCategory = options.category;
+    // Step 1: Detect category + subcategories and extract keywords
+    let detectedCategory: string | null | undefined = options.category;
+    let detectedSubcategories: string[] = [];
     
-    const [aiCategory, keywords] = await Promise.all([
-      // Detect category if not manually specified
-      !detectedCategory ? detectCategoryWithAI(query) : Promise.resolve(null),
-      // Extract keywords for relevance scoring
-      extractKeywords(query)
-    ]);
-    
-    if (!detectedCategory && aiCategory) {
-      detectedCategory = aiCategory;
+    if (!detectedCategory) {
+      detectedCategory = await detectCategoryWithAI(query);
     }
+    
+    // Detect subcategories from database if category is detected
+    if (detectedCategory && !options.subcategory) {
+      const subcategoryResults = await detectSubcategoryWithAI(query, detectedCategory);
+      if (subcategoryResults.length > 0) {
+        detectedSubcategories = subcategoryResults.map(s => s.value);
+        console.log(`[ImageSearch] AI Detected subcategories: ${detectedSubcategories.join(', ')} (${subcategoryResults.length} doctors)`);
+      }
+    } else if (options.subcategory) {
+      detectedSubcategories = [options.subcategory];
+    }
+    
+    // Extract keywords for relevance scoring
+    const keywords = await extractKeywords(query);
 
-    // Step 3: Build database query with category filter
+    // Step 2: Build database query with category and subcategory filters
     let dbQuery = supabase
       .from("images")
       .select("*")
@@ -566,8 +587,16 @@ export async function searchImagesByText(
     if (detectedCategory) {
       dbQuery = dbQuery.eq("category", detectedCategory);
       console.log(`[ImageSearch] Filtering by category: ${detectedCategory}`);
-    } else {
-      console.log(`[ImageSearch] No category filter, searching all images`);
+    }
+    
+    if (detectedSubcategories.length > 0) {
+      if (detectedSubcategories.length === 1) {
+        dbQuery = dbQuery.eq("subcategory", detectedSubcategories[0]);
+        console.log(`[ImageSearch] Filtering by subcategory: ${detectedSubcategories[0]}`);
+      } else {
+        dbQuery = dbQuery.in("subcategory", detectedSubcategories);
+        console.log(`[ImageSearch] Filtering by subcategories: ${detectedSubcategories.join(', ')}`);
+      }
     }
 
     const { data, error } = await dbQuery.limit(200);
@@ -579,13 +608,14 @@ export async function searchImagesByText(
 
     console.log(`[ImageSearch] Found ${data?.length || 0} images in database`);
 
-    // Step 4: Calculate relevance scores (but include ALL images in category)
+    // Step 3: Calculate relevance scores
     const scoredImages: { image: SearchableImage; score: number }[] = [];
 
     for (const item of data || []) {
       const image: SearchableImage = {
         id: item.id,
         category: item.category,
+        subcategory: item.subcategory,
         storageUrl: item.storage_url,
         caption: item.caption,
         extractedText: item.extracted_text,
@@ -593,23 +623,20 @@ export async function searchImagesByText(
       };
 
       const score = calculateRelevance(query, image, keywords);
-      // Include ALL images in category, even with score 0
       scoredImages.push({ image, score });
     }
 
     scoredImages.sort((a, b) => b.score - a.score);
 
-    // Show all images in category, sorted by relevance (but limit by maxResults)
     const maxResults = options.maxResults || 5;
     const finalImages = scoredImages.slice(0, maxResults);
 
-    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'})`);
+    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'}, subcategories: ${detectedSubcategories.join(', ') || 'none'})`);
     
-    // Log scores for debugging
     if (scoredImages.length > 0) {
       console.log('[ImageSearch] Image scores:');
       scoredImages.forEach((si, idx) => {
-        console.log(`  #${idx + 1}: score=${si.score}, caption="${si.image.caption?.substring(0, 40)}..."`);
+        console.log(`  #${idx + 1}: score=${si.score}, category=${si.image.category}, subcategory=${si.image.subcategory || 'none'}, caption="${si.image.caption?.substring(0, 40)}..."`);
       });
     }
 
@@ -640,13 +667,22 @@ export async function searchImagesByResponse(
   console.log(`[ImageSearch] Searching by response: "${responseText.substring(0, 50)}..."`);
 
   try {
-    // Step 1: Detect category and extract keywords in PARALLEL
-    const [detectedCategory, keywords] = await Promise.all([
-      detectCategoryWithAI(responseText),
-      extractKeywords(responseText)
-    ]);
+    // Step 1: Detect category + subcategories and extract keywords
+    let detectedCategory = await detectCategoryWithAI(responseText);
+    let detectedSubcategories: string[] = [];
+    
+    // Detect subcategories from database if category is detected
+    if (detectedCategory) {
+      const subcategoryResults = await detectSubcategoryWithAI(responseText, detectedCategory);
+      if (subcategoryResults.length > 0) {
+        detectedSubcategories = subcategoryResults.map(s => s.value);
+        console.log(`[ImageSearch] AI Detected subcategories: ${detectedSubcategories.join(', ')} (${subcategoryResults.length} doctors)`);
+      }
+    }
+    
+    const keywords = await extractKeywords(responseText);
 
-    // Step 3: Build database query with category filter
+    // Step 2: Build database query with category and subcategory filters
     let dbQuery = supabase
       .from("images")
       .select("*")
@@ -656,8 +692,16 @@ export async function searchImagesByResponse(
     if (detectedCategory) {
       dbQuery = dbQuery.eq("category", detectedCategory);
       console.log(`[ImageSearch] Filtering by category: ${detectedCategory}`);
-    } else {
-      console.log(`[ImageSearch] No category filter, searching all images`);
+    }
+    
+    if (detectedSubcategories.length > 0) {
+      if (detectedSubcategories.length === 1) {
+        dbQuery = dbQuery.eq("subcategory", detectedSubcategories[0]);
+        console.log(`[ImageSearch] Filtering by subcategory: ${detectedSubcategories[0]}`);
+      } else {
+        dbQuery = dbQuery.in("subcategory", detectedSubcategories);
+        console.log(`[ImageSearch] Filtering by subcategories: ${detectedSubcategories.join(', ')}`);
+      }
     }
 
     const { data, error } = await dbQuery.limit(200);
@@ -669,13 +713,14 @@ export async function searchImagesByResponse(
 
     console.log(`[ImageSearch] Found ${data?.length || 0} images in database`);
 
-    // Step 4: Calculate relevance scores (but include ALL images in category)
+    // Step 3: Calculate relevance scores
     const scoredImages: { image: SearchableImage; score: number }[] = [];
 
     for (const item of data || []) {
       const image: SearchableImage = {
         id: item.id,
         category: item.category,
+        subcategory: item.subcategory,
         storageUrl: item.storage_url,
         caption: item.caption,
         extractedText: item.extracted_text,
@@ -683,23 +728,20 @@ export async function searchImagesByResponse(
       };
 
       const score = calculateRelevance(responseText, image, keywords);
-      // Include ALL images in category, even with score 0
       scoredImages.push({ image, score });
     }
 
     scoredImages.sort((a, b) => b.score - a.score);
 
-    // Show all images in category, sorted by relevance (but limit by maxResults)
     const maxResults = options.maxResults || 5;
     const finalImages = scoredImages.slice(0, maxResults);
 
-    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'})`);
+    console.log(`[ImageSearch] Returning ${finalImages.length}/${scoredImages.length} images (category: ${detectedCategory || 'none'}, subcategories: ${detectedSubcategories.join(', ') || 'none'})`);
     
-    // Log scores for debugging
     if (scoredImages.length > 0) {
       console.log('[ImageSearch] Image scores:');
       scoredImages.forEach((si, idx) => {
-        console.log(`  #${idx + 1}: score=${si.score}, category=${si.image.category}, caption="${si.image.caption?.substring(0, 40)}..."`);
+        console.log(`  #${idx + 1}: score=${si.score}, category=${si.image.category}, subcategory=${si.image.subcategory || 'none'}, caption="${si.image.caption?.substring(0, 40)}..."`);
       });
     }
 

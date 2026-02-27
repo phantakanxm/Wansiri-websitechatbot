@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Copy, Check, Bot, User, RefreshCw, ZoomIn, X, ImageIcon, ChevronDown, ChevronUp, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Copy, Check, Bot, User, RefreshCw, ZoomIn, X, ImageIcon, ChevronDown, ChevronUp, Eye, ChevronLeft, ChevronRight, Play, Video } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,34 @@ import {
   DialogTrigger,
   DialogTitle,
 } from "@/components/ui/dialog";
+
+// Helper function to extract YouTube video ID from various URL formats
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  
+  // Patterns for different YouTube URL formats
+  const patterns = [
+    // youtu.be/VIDEO_ID
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    // youtube.com/watch?v=VIDEO_ID
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    // youtube.com/embed/VIDEO_ID
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    // youtube.com/v/VIDEO_ID
+    /youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match && match[1]) {
+      console.log('[extractYouTubeId] Found ID:', match[1], 'from URL:', url);
+      return match[1];
+    }
+  }
+  
+  console.log('[extractYouTubeId] Could not extract ID from URL:', url);
+  return null;
+}
 
 interface ChatMessageProps {
   message: MessageType;
@@ -48,6 +76,13 @@ export function ChatMessage({
     ko: { view: '사진 보기', hide: '사진 숨기기', count: (n: number) => `${n}장` },
     zh: { view: '查看图片', hide: '隐藏图片', count: (n: number) => `${n}张` },
   };
+  
+  const viewVideosLabels = {
+    en: { view: 'View videos', hide: 'Hide videos', count: (n: number) => `${n} videos`, watch: 'Watch video' },
+    th: { view: 'ดูวิดีโอ', hide: 'ซ่อนวิดีโอ', count: (n: number) => `${n} วิดีโอ`, watch: 'ดูวิดีโอ' },
+    ko: { view: '동영상 보기', hide: '동영상 숨기기', count: (n: number) => `${n}개`, watch: '시청하기' },
+    zh: { view: '观看视频', hide: '隐藏视频', count: (n: number) => `${n} 个视频`, watch: '观看' },
+  };
   const countryLabels = {
     en: { th: '🇹🇭 Thailand', kr: '🇰🇷 Korea', uk: '🇬🇧 UK/English', other: '🌏 Other' },
     th: { th: '🇹🇭 ไทย', kr: '🇰🇷 เกาหลี', uk: '🇬🇧 อังกฤษ', other: '🌏 อื่นๆ' },
@@ -65,6 +100,7 @@ export function ChatMessage({
   const labels = countryLabels[language] || countryLabels.en;
   const svcLabels = serviceLabels[language] || serviceLabels.en;
   const imgLabels = viewImagesLabels[language] || viewImagesLabels.en;
+  const vidLabels = viewVideosLabels[language] || viewVideosLabels.en;
 
   const copyToClipboard = async (code: string) => {
     await navigator.clipboard.writeText(code);
@@ -82,6 +118,12 @@ export function ChatMessage({
   // Get images array
   const images = showImages ? message.availableImages : message.images;
   const imageCount = images?.length || 0;
+  
+  // Video states
+  const [showVideos, setShowVideos] = useState(false);
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(null);
+  const videoCount = message.videos?.length || 0;
 
   return (
     <div
@@ -471,6 +513,272 @@ export function ChatMessage({
               </DialogContent>
             </Dialog>
           </>
+        )}
+
+        {/* ============================================
+            ENHANCED YOUTUBE VIDEOS SECTION
+            ============================================ */}
+        
+        {/* View Videos Button - Beautiful Gradient Button */}
+        {!isUser && message.videos && message.videos.length > 0 && !showVideos && (
+          <button
+            onClick={() => setShowVideos(true)}
+            className={cn(
+              "mt-2 sm:mt-3 group/btn relative overflow-hidden",
+              "flex items-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3",
+              "rounded-xl sm:rounded-2xl",
+              "bg-gradient-to-r from-rose-500 via-pink-500 to-rose-500",
+              "text-white font-medium text-sm sm:text-base",
+              "shadow-lg shadow-rose-500/25 hover:shadow-xl hover:shadow-rose-500/30",
+              "transform hover:-translate-y-0.5 active:translate-y-0",
+              "transition-all duration-300 ease-out",
+              "border-0 outline-none focus:ring-2 focus:ring-rose-500/50 focus:ring-offset-2"
+            )}
+          >
+            {/* Shine effect */}
+            <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700" />
+            
+            {/* Icon */}
+            <span className="relative flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/20 backdrop-blur-sm">
+              <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            </span>
+            
+            {/* Text */}
+            <span className="relative">{vidLabels.view}</span>
+            
+            {/* Count badge */}
+            <span className="relative flex items-center justify-center min-w-[24px] sm:min-w-[28px] h-5 sm:h-6 px-1.5 sm:px-2 rounded-full bg-white/20 backdrop-blur-sm text-xs sm:text-sm font-semibold">
+              {message.videos.length}
+            </span>
+            
+            {/* Arrow */}
+            <ChevronDown className="relative w-4 h-4 sm:w-5 sm:h-5 opacity-70 group-hover/btn:translate-y-0.5 transition-transform" />
+          </button>
+        )}
+
+        {/* Hide Videos Button */}
+        {!isUser && message.videos && message.videos.length > 0 && showVideos && (
+          <button
+            onClick={() => {
+              setShowVideos(false);
+              setActiveVideoId(null);
+            }}
+            className={cn(
+              "mt-2 sm:mt-3 group/btn",
+              "flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5",
+              "rounded-xl sm:rounded-2xl",
+              "bg-muted/80 hover:bg-muted",
+              "text-muted-foreground hover:text-foreground font-medium text-sm",
+              "border border-border/50 hover:border-border",
+              "transition-all duration-200"
+            )}
+          >
+            <ChevronUp className="w-4 h-4" />
+            <span>{vidLabels.hide}</span>
+          </button>
+        )}
+        
+        {/* Videos Gallery - Thumbnails only (click to open in modal) */}
+        {!isUser && showVideos && message.videos && message.videos.length > 0 && (
+          <div className={cn(
+            "mt-3 sm:mt-4 w-full",
+            "p-2 sm:p-3 rounded-2xl bg-muted/30 border border-border/30"
+          )}>
+            <div className={cn(
+              "grid gap-2 sm:gap-3",
+              videoCount === 1 ? "grid-cols-1 max-w-lg mx-auto" : 
+              videoCount === 2 ? "grid-cols-1 sm:grid-cols-2" :
+              "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+            )}>
+              {message.videos.map((video, idx) => {
+                const videoId = extractYouTubeId(video.url);
+                if (!videoId) return null;
+                
+                const thumbnailUrl = video.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                const highResThumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                
+                return (
+                  <div 
+                    key={idx}
+                    onClick={() => {
+                      setActiveVideoId(videoId);
+                      setSelectedVideoIndex(idx);
+                    }}
+                    className={cn(
+                      "group/video relative overflow-hidden cursor-pointer",
+                      "rounded-xl sm:rounded-2xl",
+                      "bg-black border border-border/30",
+                      "shadow-sm hover:shadow-lg",
+                      "transition-all duration-300"
+                    )}
+                  >
+                    {/* Thumbnail with Play Button Overlay */}
+                    <div className="relative aspect-video">
+                      <img
+                        src={thumbnailUrl}
+                        alt={video.title || `Video ${idx + 1}`}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover/video:scale-105"
+                        loading="lazy"
+                        onError={(e) => {
+                          // Fallback to default thumbnail if high res fails
+                          (e.target as HTMLImageElement).src = `https://img.youtube.com/vi/${videoId}/default.jpg`;
+                        }}
+                      />
+                      
+                      {/* Dark Overlay */}
+                      <div className="absolute inset-0 bg-black/20 group-hover/video:bg-black/40 transition-colors duration-300" />
+                      
+                      {/* Play Button */}
+                      <div className={cn(
+                        "absolute inset-0 flex items-center justify-center",
+                        "group/play"
+                      )}>
+                        <div className={cn(
+                          "w-14 h-14 sm:w-16 sm:h-16 rounded-full",
+                          "bg-white/95 hover:bg-white",
+                          "flex items-center justify-center",
+                          "shadow-xl shadow-black/40",
+                          "transform group-hover/play:scale-110 group-hover/play:shadow-2xl",
+                          "transition-all duration-300"
+                        )}>
+                          <Play className="w-6 h-6 sm:w-7 sm:h-7 text-rose-500 fill-rose-500 ml-1" />
+                        </div>
+                      </div>
+                      
+                      {/* YouTube badge */}
+                      <div className="absolute bottom-2 right-2 px-2 py-1 rounded-md bg-red-600 text-white text-xs font-bold shadow-lg">
+                        ▶ YouTube
+                      </div>
+                      
+                      {/* Index badge */}
+                      <div className="absolute top-2 left-2">
+                        <span className="flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-black/60 backdrop-blur-sm text-white text-xs font-medium">
+                          {idx + 1}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    {/* Video Title - Hidden as requested */}
+                    {/* {video.title && (
+                      <div className="p-2 sm:p-3 bg-card">
+                        <p className="text-xs sm:text-sm font-medium line-clamp-2 text-foreground group-hover/video:text-rose-500 transition-colors">
+                          {video.title}
+                        </p>
+                      </div>
+                    )} */}
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Gallery footer hint */}
+            <div className="mt-2 sm:mt-3 flex items-center justify-center gap-2 text-muted-foreground/60 text-xs">
+              <Play className="w-3 h-3" />
+              <span>
+                {language === 'th' ? 'คลิกที่รูปเพื่อดูวิดีโอ' : 
+                 language === 'ko' ? '썸네일을 클릭하여 동영상 보기' :
+                 language === 'zh' ? '点击缩略图观看视频' :
+                 'Click thumbnail to watch video'}
+              </span>
+            </div>
+
+            {/* Video Modal/Dialog */}
+            <Dialog 
+              open={activeVideoId !== null} 
+              onOpenChange={(open) => {
+                if (!open) {
+                  setActiveVideoId(null);
+                  setSelectedVideoIndex(null);
+                }
+              }}
+            >
+              <DialogContent 
+                className={cn(
+                  "max-w-[95vw] sm:max-w-4xl lg:max-w-5xl",
+                  "p-0 overflow-hidden",
+                  "bg-black border-0",
+                  "shadow-2xl"
+                )}
+                onPointerDownOutside={() => {
+                  setActiveVideoId(null);
+                  setSelectedVideoIndex(null);
+                }}
+              >
+                <DialogTitle className="sr-only">
+                  Video Player
+                </DialogTitle>
+                
+                {activeVideoId !== null && selectedVideoIndex !== null && (
+                  <div className="relative">
+                    {/* Close button */}
+                    <button 
+                      className="absolute -top-10 right-0 z-[60] w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-sm flex items-center justify-center text-white transition-colors shadow-lg"
+                      onClick={() => {
+                        setActiveVideoId(null);
+                        setSelectedVideoIndex(null);
+                      }}
+                      type="button"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                    
+                    {/* Video indicator */}
+                    {videoCount > 1 && (
+                      <div className="absolute -top-10 left-0 z-50 px-4 py-2 rounded-full bg-black/60 backdrop-blur-sm">
+                        <span className="text-white text-sm font-medium">
+                          {selectedVideoIndex + 1} / {videoCount}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Video Player */}
+                    <div className="relative w-full aspect-video bg-black">
+                      <iframe
+                        key={activeVideoId}
+                        src={`https://www.youtube.com/embed/${activeVideoId}?autoplay=1&rel=0&modestbranding=1&playsinline=1`}
+                        title="Video Player"
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; playsinline"
+                        allowFullScreen
+                        style={{ border: 'none' }}
+                      />
+                    </div>
+                    
+                    {/* Video Navigation - Title hidden as requested */}
+                    {videoCount > 1 && (
+                      <div className="p-3 bg-zinc-900 flex items-center justify-center gap-4">
+                        <button
+                          onClick={() => {
+                            const newIndex = selectedVideoIndex > 0 ? selectedVideoIndex - 1 : videoCount - 1;
+                            setSelectedVideoIndex(newIndex);
+                            const prevVideoId = extractYouTubeId(message.videos?.[newIndex]?.url || '');
+                            if (prevVideoId) setActiveVideoId(prevVideoId);
+                          }}
+                          className="w-9 h-9 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white transition-colors"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                        <span className="text-zinc-400 text-sm">
+                          {selectedVideoIndex + 1} / {videoCount}
+                        </span>
+                        <button
+                          onClick={() => {
+                            const newIndex = selectedVideoIndex < videoCount - 1 ? selectedVideoIndex + 1 : 0;
+                            setSelectedVideoIndex(newIndex);
+                            const nextVideoId = extractYouTubeId(message.videos?.[newIndex]?.url || '');
+                            if (nextVideoId) setActiveVideoId(nextVideoId);
+                          }}
+                          className="w-9 h-9 rounded-full bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center text-white transition-colors"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
 
         {/* Timestamp */}

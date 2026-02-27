@@ -11,6 +11,7 @@ interface Message {
   timestamp: number;
   availableImages?: { url: string; caption?: string }[];
   imageCount?: number;
+  videos?: { url: string; title?: string }[];
 }
 
 interface Session {
@@ -45,7 +46,7 @@ export async function getSession(sessionId: string): Promise<Session> {
         // Fetch messages for this session
         const { data: messagesData, error: msgError } = await supabase!
           .from("messages")
-          .select("role, content, created_at, available_images, image_count")
+          .select("role, content, created_at, available_images, image_count, metadata")
           .eq("session_id", sessionData.id)
           .order("created_at", { ascending: true });
 
@@ -59,6 +60,7 @@ export async function getSession(sessionId: string): Promise<Session> {
           timestamp: new Date(m.created_at).getTime(),
           availableImages: m.available_images,
           imageCount: m.image_count,
+          videos: m.metadata?.videos || (m.metadata?.videos ? m.metadata.videos : undefined),
         })) || [];
 
         // Update last_active_at
@@ -136,6 +138,7 @@ export async function addMessage(
     source?: string;
     availableImages?: { url: string; caption?: string }[];
     imageCount?: number;
+    videos?: { url: string; title?: string }[];
   }
 ): Promise<void> {
   const session = await getSession(sessionId);
@@ -145,6 +148,7 @@ export async function addMessage(
     timestamp: Date.now(),
     availableImages: metadata?.availableImages,
     imageCount: metadata?.imageCount,
+    videos: metadata?.videos,
   });
   session.lastActivity = Date.now();
 
@@ -169,6 +173,7 @@ export async function addMessage(
           source: metadata?.source || "api",
           available_images: metadata?.availableImages,
           image_count: metadata?.imageCount || 0,
+          metadata: metadata?.videos ? { videos: metadata.videos } : undefined,
         });
 
         if (error) {

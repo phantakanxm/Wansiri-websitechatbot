@@ -101,6 +101,7 @@ export default function ChatPage() {
           timestamp: new Date(m.timestamp || m.created_at),
           availableImages: m.available_images || m.availableImages,
           imageCount: m.image_count || m.imageCount,
+          videos: m.videos,
         }));
         setMessages(formattedMessages);
         setMessageCount(formattedMessages.length);
@@ -124,7 +125,7 @@ export default function ChatPage() {
 
     const decoder = new TextDecoder();
     let accumulatedContent = '';
-    let metadata: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string; availableImages?: { url: string; caption?: string }[]; imageCount?: number } = {};
+    let metadata: { sessionId?: string; detectedLanguage?: SupportedLanguage; mode?: string; availableImages?: { url: string; caption?: string }[]; imageCount?: number; videos?: { url: string; title?: string }[] } = {};
 
     try {
       while (true) {
@@ -169,6 +170,7 @@ export default function ChatPage() {
                   
                 case 'complete':
                   // Final metadata
+                  console.log('[Chat] Complete event received:', parsed);
                   if (parsed.detectedLanguage) metadata.detectedLanguage = parsed.detectedLanguage;
                   if (parsed.targetLanguage) metadata.mode = parsed.targetLanguage;
                   if (parsed.availableImages) {
@@ -177,6 +179,12 @@ export default function ChatPage() {
                   }
                   if (parsed.imageCount !== undefined) {
                     metadata.imageCount = parsed.imageCount;
+                  }
+                  if (parsed.videos) {
+                    metadata.videos = parsed.videos;
+                    console.log('[Chat] Received videos in complete event:', parsed.videos.length, parsed.videos);
+                  } else {
+                    console.log('[Chat] No videos in complete event');
                   }
                   break;
                   
@@ -201,6 +209,7 @@ export default function ChatPage() {
                   if (parsed.mode) metadata.mode = parsed.mode;
                   if (parsed.availableImages) metadata.availableImages = parsed.availableImages;
                   if (parsed.imageCount !== undefined) metadata.imageCount = parsed.imageCount;
+                  if (parsed.videos) metadata.videos = parsed.videos;
               }
               
             } catch (e) {
@@ -213,10 +222,11 @@ export default function ChatPage() {
 
       // Mark streaming as complete and attach availableImages if any
       console.log('[Chat] Attaching availableImages to message:', metadata.availableImages?.length || 0);
+      console.log('[Chat] Attaching videos to message:', metadata.videos?.length || 0);
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMessageId
-            ? { ...msg, content: accumulatedContent, isStreaming: false, availableImages: metadata.availableImages, imageCount: metadata.imageCount }
+            ? { ...msg, content: accumulatedContent, isStreaming: false, availableImages: metadata.availableImages, imageCount: metadata.imageCount, videos: metadata.videos }
             : msg
         )
       );

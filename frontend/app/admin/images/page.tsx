@@ -50,12 +50,22 @@ import { CuteUploadLoader } from "@/components/cute-upload-loader";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+interface Subcategory {
+  id: string;
+  category_id: string;
+  value: string;
+  label: string;
+  keywords: string[];
+  sort_order: number;
+}
+
 interface UploadedImage {
   id: string;
   url: string;
   caption?: string;
   extractedText?: string;
   category: string;
+  subcategory?: string;
 }
 
 interface Category {
@@ -75,6 +85,8 @@ export default function ImagesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [category, setCategory] = useState("general");
+  const [subcategory, setSubcategory] = useState<string | undefined>(undefined);
+  const [availableSubcategories, setAvailableSubcategories] = useState<{ value: string; label: string }[]>([]);
   const [activeTab, setActiveTab] = useState<"active" | "trash">("active");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [permanentDeleteDialogOpen, setPermanentDeleteDialogOpen] = useState(false);
@@ -94,6 +106,16 @@ export default function ImagesPage() {
   const [newCategoryLabel, setNewCategoryLabel] = useState("");
   const [newCategoryIcon, setNewCategoryIcon] = useState("📁");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  // Subcategories state
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+  const [isLoadingSubcategories, setIsLoadingSubcategories] = useState(false);
+  const [subcategoryDialogOpen, setSubcategoryDialogOpen] = useState(false);
+  const [newSubcategoryCategoryId, setNewSubcategoryCategoryId] = useState<string>("");
+  const [newSubcategoryValue, setNewSubcategoryValue] = useState("");
+  const [newSubcategoryLabel, setNewSubcategoryLabel] = useState("");
+  const [newSubcategoryKeywords, setNewSubcategoryKeywords] = useState("");
+  const [isCreatingSubcategory, setIsCreatingSubcategory] = useState(false);
 
   // Fetch active images
   const fetchImages = useCallback(async () => {
@@ -151,6 +173,99 @@ export default function ImagesPage() {
       setIsLoadingCategories(false);
     }
   }, []);
+
+  // Update available subcategories when category changes
+  useEffect(() => {
+    const fetchSubcategories = async () => {
+      const selectedCategory = categories.find(c => c.value === category);
+      if (selectedCategory) {
+        setIsLoadingSubcategories(true);
+        try {
+          const response = await fetch(`${API_URL}/api/admin/subcategories?category_id=${selectedCategory.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setSubcategories(data.subcategories || []);
+            setAvailableSubcategories(
+              (data.subcategories || []).map((s: Subcategory) => ({ value: s.value, label: s.label }))
+            );
+          } else {
+            setAvailableSubcategories([]);
+            setSubcategories([]);
+          }
+        } catch (error) {
+          console.error("Error fetching subcategories:", error);
+          setAvailableSubcategories([]);
+          setSubcategories([]);
+        } finally {
+          setIsLoadingSubcategories(false);
+        }
+      } else {
+        setAvailableSubcategories([]);
+        setSubcategories([]);
+      }
+      setSubcategory(undefined); // Reset subcategory when category changes
+    };
+
+    fetchSubcategories();
+  }, [category, categories]);
+
+  // Create new subcategory
+  const handleCreateSubcategory = async () => {
+    if (!newSubcategoryValue.trim() || !newSubcategoryLabel.trim()) {
+      showNotification("error", "กรุณากรอกชื่อและ Label ของหมวดหมู่ย่อย");
+      return;
+    }
+
+    if (!newSubcategoryCategoryId) {
+      showNotification("error", "กรุณาเลือกหมวดหมู่หลัก");
+      return;
+    }
+
+    setIsCreatingSubcategory(true);
+    try {
+      const keywords = newSubcategoryKeywords.split(",").map(k => k.trim()).filter(k => k);
+      const response = await fetch(`${API_URL}/api/admin/subcategories`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category_id: newSubcategoryCategoryId,
+          value: newSubcategoryValue,
+          label: newSubcategoryLabel,
+          keywords,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        showNotification("success", "สร้างหมวดหมู่ย่อยสำเร็จ");
+        setSubcategoryDialogOpen(false);
+        setNewSubcategoryCategoryId("");
+        setNewSubcategoryValue("");
+        setNewSubcategoryLabel("");
+        setNewSubcategoryKeywords("");
+        // Refresh subcategories for current category
+        const selectedCategory = categories.find(c => c.value === category);
+        if (selectedCategory) {
+          const refreshResponse = await fetch(`${API_URL}/api/admin/subcategories?category_id=${selectedCategory.id}`);
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            setSubcategories(refreshData.subcategories || []);
+            setAvailableSubcategories(
+              (refreshData.subcategories || []).map((s: Subcategory) => ({ value: s.value, label: s.label }))
+            );
+          }
+        }
+      } else {
+        showNotification("error", data.error || "สร้างหมวดหมู่ย่อยไม่สำเร็จ");
+      }
+    } catch (error) {
+      console.error("Error creating subcategory:", error);
+      showNotification("error", "สร้างหมวดหมู่ย่อยไม่สำเร็จ");
+    } finally {
+      setIsCreatingSubcategory(false);
+    }
+  };
 
   // Create new category
   const handleCreateCategory = async () => {
@@ -264,6 +379,9 @@ export default function ImagesPage() {
       formData.append("images", file);
     });
     formData.append("category", category);
+    if (subcategory) {
+      formData.append("subcategory", subcategory);
+    }
 
     try {
       const response = await fetch(`${API_URL}/api/admin/images/upload`, {
@@ -278,6 +396,7 @@ export default function ImagesPage() {
       
       showNotification("success", `อัปโหลดสำเร็จ ${successCount}/${selectedFiles.length} รูป`);
       setSelectedFiles([]);
+      setSubcategory(undefined);
       fetchImages();
     } catch (error) {
       console.error("Upload error:", error);
@@ -504,6 +623,42 @@ export default function ImagesPage() {
                   ใช้สำหรับจัดกลุ่มและค้นหารูปภาพที่เหมาะสม
                 </p>
               </div>
+
+              {/* Subcategory Select */}
+              {(availableSubcategories.length > 0 || categories.find(c => c.value === category)) && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      หมวดหมู่ย่อย (Subcategory)
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSubcategoryDialogOpen(true)}
+                      disabled={!categories.find(c => c.value === category)}
+                      className="h-7 px-2 text-[#16bec9] hover:text-[#14a8b2] hover:bg-[#16bec9]/10"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      เพิ่มหมวดหมู่ย่อย
+                    </Button>
+                  </div>
+                  <Select value={subcategory} onValueChange={setSubcategory}>
+                    <SelectTrigger className="h-10 border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]">
+                      <SelectValue placeholder="เลือกหมวดหมู่ย่อย (ถ้ามี)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableSubcategories.map((sub) => (
+                        <SelectItem key={sub.value} value={sub.value}>
+                          {sub.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">
+                    เลือกเฉพาะรูปภาพที่เกี่ยวข้องกับหัวข้อเฉพาะ
+                  </p>
+                </div>
+              )}
 
               {/* File Upload Dropzone */}
               <div className="space-y-4">
@@ -774,16 +929,22 @@ export default function ImagesPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {(() => {
-                        const cat = getCategoryBadge(img.category);
-                        return (
-                          <Badge variant="outline" className="text-xs flex items-center gap-1.5 py-1.5 px-2">
-                            <span>{cat.icon}</span>
-                            <span className="text-gray-700 dark:text-gray-300">{cat.label}</span>
-                            <span className="text-gray-400 text-[10px]">({cat.value})</span>
+                      <div className="flex flex-col gap-1">
+                        {(() => {
+                          const cat = getCategoryBadge(img.category);
+                          return (
+                            <Badge variant="outline" className="text-xs flex items-center gap-1.5 py-1.5 px-2 w-fit">
+                              <span>{cat.icon}</span>
+                              <span className="text-gray-700 dark:text-gray-300">{cat.label}</span>
+                            </Badge>
+                          );
+                        })()}
+                        {img.subcategory && (
+                          <Badge variant="secondary" className="text-xs py-0.5 px-2 w-fit">
+                            {subcategories.find(s => s.value === img.subcategory)?.label || img.subcategory}
                           </Badge>
-                        );
-                      })()}
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right">
                       {activeTab === "active" ? (
@@ -990,6 +1151,120 @@ export default function ImagesPage() {
                 <>
                   <Plus className="h-4 w-4 mr-2" />
                   สร้างหมวดหมู่
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Subcategory Dialog */}
+      <Dialog open={subcategoryDialogOpen} onOpenChange={setSubcategoryDialogOpen}>
+        <DialogContent className="border-0 bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+              <div className="h-8 w-8 rounded-full bg-[#16bec9]/10 dark:bg-[#16bec9]/20 flex items-center justify-center">
+                <Tag className="h-4 w-4 text-[#16bec9]" />
+              </div>
+              เพิ่มหมวดหมู่ย่อยใหม่
+            </DialogTitle>
+            <DialogDescription className="text-gray-500">
+              สร้างหมวดหมู่ย่อยสำหรับจัดกลุ่มรูปภาพ
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {/* Category Select */}
+            <div className="space-y-2">
+              <Label htmlFor="subcat-category" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                หมวดหมู่หลัก <span className="text-red-500">*</span>
+              </Label>
+              <Select value={newSubcategoryCategoryId} onValueChange={setNewSubcategoryCategoryId}>
+                <SelectTrigger className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]">
+                  <SelectValue placeholder="เลือกหมวดหมู่หลัก" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      <span className="flex items-center gap-2">
+                        <span>{cat.icon}</span>
+                        <span>{cat.label}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcat-value" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                รหัสหมวดหมู่ย่อย (Value) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="subcat-value"
+                placeholder="เช่น dr-sarun, sigmoid"
+                value={newSubcategoryValue}
+                onChange={(e) => setNewSubcategoryValue(e.target.value)}
+                className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]"
+              />
+              <p className="text-xs text-gray-500">
+                ใช้เฉพาะ a-z, 0-9, และขีดกลาง ระบบจะแปลงเป็นตัวพิมพ์เล็กอัตโนมัติ
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcat-label" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                ชื่อที่แสดง (Label) <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="subcat-label"
+                placeholder="เช่น ดร.ศรัณย์, เทคนิค Sigmoid"
+                value={newSubcategoryLabel}
+                onChange={(e) => setNewSubcategoryLabel(e.target.value)}
+                className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subcat-keywords" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                คำสำหรับ AI Detection (Keywords)
+              </Label>
+              <Input
+                id="subcat-keywords"
+                placeholder="เช่น ศรัณย์, sarun, หมอศรัณย์ (คั่นด้วยลูกน้ำ)"
+                value={newSubcategoryKeywords}
+                onChange={(e) => setNewSubcategoryKeywords(e.target.value)}
+                className="border-[#16bec9]/20 dark:border-slate-700 focus:ring-[#16bec9]"
+              />
+              <p className="text-xs text-gray-500">
+                คำเหล่านี้จะใช้ให้ AI ตรวจจับอัตโนมัติเมื่อผู้ใช้ถาม (คั่นด้วยลูกน้ำ)
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSubcategoryDialogOpen(false);
+                setNewSubcategoryCategoryId("");
+                setNewSubcategoryValue("");
+                setNewSubcategoryLabel("");
+                setNewSubcategoryKeywords("");
+              }}
+              className="border-gray-200 dark:border-slate-700"
+            >
+              ยกเลิก
+            </Button>
+            <Button 
+              onClick={handleCreateSubcategory}
+              disabled={isCreatingSubcategory || !newSubcategoryCategoryId || !newSubcategoryValue.trim() || !newSubcategoryLabel.trim()}
+              className="bg-gradient-to-r from-[#16bec9] to-[#14a8b2] text-white"
+            >
+              {isCreatingSubcategory ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  กำลังสร้าง...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  สร้างหมวดหมู่ย่อย
                 </>
               )}
             </Button>

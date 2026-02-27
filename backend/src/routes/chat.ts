@@ -24,6 +24,7 @@ import {
   SERVICES,
   createOnboardingRecord
 } from "../lib/onboarding";
+import { enhanceResponseWithVideos } from "../lib/videos";
 
 const router = Router();
 
@@ -292,6 +293,7 @@ router.post("/", async (req, res) => {
       selectedLanguage: selectedLanguage || null,
       availableImages: result.availableImages || [],
       imageCount: result.imageCount || 0,
+      videos: result.videos || [],
     });
   } catch (error) {
     const responseTime = Date.now() - startTime;

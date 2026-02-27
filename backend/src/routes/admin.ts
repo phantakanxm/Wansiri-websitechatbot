@@ -21,6 +21,14 @@ import {
   updateCategory,
   deleteCategory,
 } from "../lib/categories";
+import {
+  getSubcategories,
+  getSubcategoriesByCategoryValue,
+  createSubcategory,
+  updateSubcategory,
+  deleteSubcategory,
+  permanentlyDeleteSubcategory,
+} from "../lib/subcategories";
 
 const router = Router();
 
@@ -174,6 +182,7 @@ router.post("/images/upload", imageUpload.array("images", 10), async (req, res) 
   try {
     const files = req.files as Express.Multer.File[];
     const category = (req.body.category as string) || "general";
+    const subcategory = (req.body.subcategory as string) || undefined;
 
     if (!files || files.length === 0) {
       res.status(400).json({ error: "No images provided" });
@@ -184,7 +193,7 @@ router.post("/images/upload", imageUpload.array("images", 10), async (req, res) 
 
     const results = [];
     for (const file of files) {
-      const result = await uploadImageDirect(file.path, file.originalname, category);
+      const result = await uploadImageDirect(file.path, file.originalname, category, subcategory);
       
       // Clean up temp file
       try {
@@ -218,7 +227,8 @@ router.post("/images/upload", imageUpload.array("images", 10), async (req, res) 
 router.get("/images", async (req, res) => {
   try {
     const category = req.query.category as string;
-    const images = await listUploadedImages(category);
+    const subcategory = req.query.subcategory as string;
+    const images = await listUploadedImages(category, subcategory);
     
     res.json({
       success: true,
@@ -229,6 +239,7 @@ router.get("/images", async (req, res) => {
         caption: img.caption,
         extractedText: img.extractedText,
         category: img.category,
+        subcategory: img.subcategory,
       })),
     });
   } catch (error) {
@@ -284,6 +295,7 @@ router.get("/images/trash", async (req, res) => {
         caption: img.caption,
         extractedText: img.extractedText,
         category: img.category,
+        subcategory: img.subcategory,
       })),
     });
   } catch (error) {
@@ -459,6 +471,173 @@ router.delete("/categories/:id", async (req, res) => {
   } catch (error) {
     console.error("Delete Category API Error:", error);
     res.status(500).json({ error: "Failed to delete category" });
+  }
+});
+
+// ============================================
+// SUBCATEGORIES ENDPOINTS
+// ============================================
+
+// GET /api/admin/subcategories - List all subcategories (optionally by category_id)
+router.get("/subcategories", async (req, res) => {
+  try {
+    const categoryId = req.query.category_id as string;
+    const subcategories = await getSubcategories(categoryId);
+    
+    res.json({
+      success: true,
+      count: subcategories.length,
+      subcategories,
+    });
+  } catch (error) {
+    console.error("List Subcategories API Error:", error);
+    res.status(500).json({ error: "Failed to list subcategories" });
+  }
+});
+
+// GET /api/admin/subcategories/by-category/:categoryValue - List subcategories by category value
+router.get("/subcategories/by-category/:categoryValue", async (req, res) => {
+  try {
+    const categoryValue = req.params.categoryValue;
+    const subcategories = await getSubcategoriesByCategoryValue(categoryValue);
+    
+    res.json({
+      success: true,
+      count: subcategories.length,
+      subcategories,
+    });
+  } catch (error) {
+    console.error("List Subcategories by Value API Error:", error);
+    res.status(500).json({ error: "Failed to list subcategories" });
+  }
+});
+
+// POST /api/admin/subcategories - Create new subcategory
+router.post("/subcategories", async (req, res) => {
+  try {
+    const { category_id, value, label, keywords, sort_order } = req.body;
+
+    if (!category_id || !value || !label) {
+      res.status(400).json({ error: "Category ID, value, and label are required" });
+      return;
+    }
+
+    const result = await createSubcategory(
+      category_id,
+      value,
+      label,
+      keywords || [],
+      sort_order
+    );
+
+    if (result.success) {
+      res.status(201).json({
+        success: true,
+        subcategory: result.subcategory,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Create Subcategory API Error:", error);
+    res.status(500).json({ error: "Failed to create subcategory" });
+  }
+});
+
+// PUT /api/admin/subcategories/:id - Update subcategory
+router.put("/subcategories/:id", async (req, res) => {
+  try {
+    const subcategoryId = req.params.id;
+    const { label, keywords, sort_order, is_active } = req.body;
+
+    if (!subcategoryId) {
+      res.status(400).json({ error: "Subcategory ID is required" });
+      return;
+    }
+
+    const updates: any = {};
+    if (label !== undefined) updates.label = label;
+    if (keywords !== undefined) updates.keywords = keywords;
+    if (sort_order !== undefined) updates.sort_order = sort_order;
+    if (is_active !== undefined) updates.is_active = is_active;
+
+    const result = await updateSubcategory(subcategoryId, updates);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        subcategory: result.subcategory,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Update Subcategory API Error:", error);
+    res.status(500).json({ error: "Failed to update subcategory" });
+  }
+});
+
+// DELETE /api/admin/subcategories/:id - Soft delete subcategory
+router.delete("/subcategories/:id", async (req, res) => {
+  try {
+    const subcategoryId = req.params.id;
+
+    if (!subcategoryId) {
+      res.status(400).json({ error: "Subcategory ID is required" });
+      return;
+    }
+
+    const result = await deleteSubcategory(subcategoryId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Subcategory deleted successfully",
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Delete Subcategory API Error:", error);
+    res.status(500).json({ error: "Failed to delete subcategory" });
+  }
+});
+
+// DELETE /api/admin/subcategories/:id/permanent - Permanently delete subcategory
+router.delete("/subcategories/:id/permanent", async (req, res) => {
+  try {
+    const subcategoryId = req.params.id;
+
+    if (!subcategoryId) {
+      res.status(400).json({ error: "Subcategory ID is required" });
+      return;
+    }
+
+    const result = await permanentlyDeleteSubcategory(subcategoryId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        message: "Subcategory permanently deleted",
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+      });
+    }
+  } catch (error) {
+    console.error("Permanent Delete Subcategory API Error:", error);
+    res.status(500).json({ error: "Failed to permanently delete subcategory" });
   }
 });
 
