@@ -525,6 +525,29 @@ export async function generateChatResponseWithHistory(
     console.log(`[Chat] Found ${videos.length} relevant video(s)`);
   }
 
+  // 9.5 Search for map images when hospital category is detected
+  if (videoResult.detectedCategories.includes("hospital")) {
+    console.log("[Chat] Hospital category detected - searching for map images...");
+    const mapResult = await searchImagesByText("แผนที่โรงพยาบาล", { 
+      maxResults: 1, 
+      category: "map-wansiri" 
+    });
+    
+    if (mapResult.images.length > 0) {
+      console.log(`[Chat] Found ${mapResult.images.length} map images`);
+      // Merge map images with existing images (avoid duplicates)
+      const existingUrls = new Set(availableImages.map(img => img.url));
+      const mapImages = mapResult.images
+        .filter(img => !existingUrls.has(img.storageUrl)) // Skip duplicates
+        .map(img => ({
+          url: img.storageUrl,
+          caption: img.caption || "แผนที่โรงพยาบาลวรรณสิริ",
+        }));
+      availableImages = [...availableImages, ...mapImages];
+      console.log(`[Chat] Added ${mapImages.length} unique map images (skipped ${mapResult.images.length - mapImages.length} duplicates)`);
+    }
+  }
+
   return {
     response: finalResponse,
     detectedLang: inputLang,

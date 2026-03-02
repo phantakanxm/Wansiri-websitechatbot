@@ -59,7 +59,16 @@ const VIDEO_CATEGORIES = [
       "where is the hospital",
       "병원 추천",
       "医院推荐",
-      "病院の紹介"
+      "病院の紹介",
+      "แผนที่โรงพยาบาล",
+      "ขอแผนที่",
+      "การเดินทาง",
+      "ไปโรงพยาบาลยังไง",
+      "ที่อยู่โรงพยาบาล",
+      "map to hospital",
+      "direction to hospital",
+      "how to get there",
+      "location"
     ]
   },
   // {
@@ -211,6 +220,7 @@ export function getVideosByCategories(
 /**
  * Enhance response ด้วยวิดีโอที่ AI เลือกให้
  * ใช้คู่กับ enhanceResponseWithImages
+ * คืนค่า videos + detectedCategories เพื่อใช้ค้นหา map images เพิ่มเติม
  */
 export async function enhanceResponseWithVideos(
   response: string,
@@ -219,13 +229,14 @@ export async function enhanceResponseWithVideos(
 ): Promise<{
   response: string;
   videos: { url: string; title?: string }[];
+  detectedCategories: string[];
 }> {
   // ใช้ AI วิเคราะห์ category
   const categories = await detectVideoCategoryWithAI(query);
   
   if (categories.length === 0) {
     console.log(`[Video] No relevant video categories detected`);
-    return { response, videos: [] };
+    return { response, videos: [], detectedCategories: [] };
   }
   
   // ดึงวิดีโอตาม categories
@@ -240,6 +251,7 @@ export async function enhanceResponseWithVideos(
     videos: videos.map(v => ({
       url: v.url,
       title: v.title
-    }))
+    })),
+    detectedCategories: categories
   };
 }

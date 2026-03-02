@@ -154,6 +154,7 @@ function getDefaultCategories(): Category[] {
     { id: "4", value: "srs-package", label: "แพ็คเกจ/ราคา (Package)", icon: "💰", sort_order: 4, created_at: "", updated_at: "" },
     { id: "5", value: "srs-room", label: "ห้องพัก/ห้องรับรอง (Room)", icon: "🛏️", sort_order: 5, created_at: "", updated_at: "" },
     { id: "6", value: "srs-operatingroom", label: "ห้องผ่าตัด (Operating Room)", icon: "🏥", sort_order: 6, created_at: "", updated_at: "" },
-    { id: "7", value: "general", label: "ทั่วไป (General)", icon: "📁", sort_order: 7, created_at: "", updated_at: "" },
+    { id: "7", value: "map-wansiri", label: "แผนที่/การเดินทาง (Map)", icon: "🗺️", sort_order: 7, created_at: "", updated_at: "" },
+    { id: "8", value: "general", label: "ทั่วไป (General)", icon: "📁", sort_order: 8, created_at: "", updated_at: "" },
   ];
 }

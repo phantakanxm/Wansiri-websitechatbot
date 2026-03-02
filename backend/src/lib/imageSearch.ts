@@ -437,6 +437,7 @@ Available categories:
 - srs-package: Pricing, packages, costs, fees, promotions (e.g., "ราคา", "แพ็คเกจ", "price", "cost")
 - srs-room: Patient rooms, hospital rooms, recovery rooms, accommodation (e.g., "ห้องพัก", "ห้องรับรอง", "room", "ward")
 - srs-operatingroom: Operating rooms, surgery rooms, medical equipment, OR (e.g., "ห้องผ่าตัด", "ห้องซีสาร์", "operating room", "OR", "surgery room")
+- map-wansiri: Maps, directions, location, how to get to hospital (e.g., "แผนที่", "map", "การเดินทาง", "direction", "ที่อยู่", "address", "ไปยังไง", "how to get")
 - general: General information, doesn't clearly fit above categories
 
 Respond with ONLY the category code (e.g., "srs-tec") or "general".
@@ -447,7 +448,7 @@ User question: "${query.substring(0, 500)}"`,
 
     const category = response.text?.trim().toLowerCase();
     
-    const validCategories = ["srs-tec", "srs-review", "srs-doctor", "srs-package", "srs-room", "srs-operatingroom"];
+    const validCategories = ["srs-tec", "srs-review", "srs-doctor", "srs-package", "srs-room", "srs-operatingroom", "map-wansiri"];
     
     if (category && validCategories.includes(category)) {
       console.log(`[ImageSearch] AI detected category: ${category}`);
